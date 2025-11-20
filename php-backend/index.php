@@ -11,11 +11,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// ⚠️ UPDATE THESE WITH YOUR HOSTINGER CREDENTIALS
-define('DB_HOST', 'srv995.hstgr.io');
-define('DB_NAME', 'u792097907_slughouse');
-define('DB_USER', 'u792097907_tdv');
-define('DB_PASS', 'YOUR_PASSWORD_HERE'); // ← CHANGE THIS!
+// ⚠️ UPDATE THESE WITH YOUR HOSTINGER CREDENTIALS or set environment variables
+define('DB_HOST', getenv('DB_HOST') ?: 'srv995.hstgr.io');
+define('DB_NAME', getenv('DB_NAME') ?: 'u792097907_slug_dev');
+define('DB_USER', getenv('DB_USER') ?: 'u792097907_slug_user');
+// Read DB_PASS from environment if set; otherwise fall back to literal
+define('DB_PASS', getenv('DB_PASS') ?: 'QYw?A#bOQnS');
 define('ADMIN_TOKEN', ''); // Optional: set to match frontend VITE_ADMIN_TOKEN
 
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
