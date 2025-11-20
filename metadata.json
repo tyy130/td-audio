@@ -1,0 +1,5 @@
+{
+  "name": "TD Audio Player",
+  "description": "A self-hosted style audio player with drag-and-drop playlist management and AI-enhanced track descriptions.",
+  "requestFramePermissions": []
+}
