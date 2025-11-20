@@ -1,17 +1,200 @@
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-# Run and deploy the app
+# TD Audio Player - Slughouse Records
 
-This contains everything you need to run your app locally.
+Private music vault for Slughouse Records. React + Vite front-end talks to a tiny Express API that lives on Hostinger. Tracks upload straight to your Hostinger file system, metadata lands in MySQL, and everyone who has the link streams from the same source.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1Vl8Bvjxt2LIwSi1nkJfJpKPZ24zHs_b7
+**🎵 [View App in AI Studio](https://ai.studio/apps/drive/1Vl8Bvjxt2LIwSi1nkJfJpKPZ24zHs_b7)**
 
-## Run Locally
+## ✨ Features
 
-**Prerequisites:**  Node.js
+- 🔐 Password-protected library management
+- ☁️ Hostinger-backed MySQL + file storage (no third-party APIs)
+- 🔀 Shuffle & repeat modes (off/all/one)
+- 🎨 Drag-and-drop queue reordering
+- 💾 Persistent playback settings via localStorage
+- 📱 Responsive mobile-first layout
+- 🎵 Multipart upload with automatic file serving
+- 🌙 Exclusive "Slughouse Records" aesthetic
 
+## 🧱 Architecture
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+| Layer | Stack | Notes |
+| --- | --- | --- |
+| Frontend | React 19 + Vite + TypeScript | Lives in `/` – static deploy to Surge (`playback.slughouse.com`) |
+| Backend | Express 4 + MySQL2 + Multer | Lives in `/server` – deploy to Hostinger VPS / Node hosting |
+| Database | Hostinger MySQL | `tracks` table stores metadata + relative file path |
+| Storage | Hostinger file uploads | API writes into `MEDIA_ROOT`, served via `MEDIA_BASE_URL` |
+
+## 🚀 Quick Start (Local)
+
+### 1. Dependencies
+
+- **Node.js** 18+
+- **MySQL** database (Hostinger panel works great)
+
+### 2. Install packages
+
+```bash
+git clone <repo>
+cd td-audio
+npm install                 # frontend deps
+npm install --prefix server # backend deps
+```
+
+### 3. Environment Variables
+
+Frontend (`.env.local`):
+
+```bash
+cp .env.example .env.local
+# Edit .env.local:
+VITE_API_BASE_URL=http://localhost:4000
+VITE_ADMIN_TOKEN=  # leave blank for dev
+```
+
+Backend (`server/.env`):
+
+```bash
+cp server/.env.example server/.env
+# Edit server/.env:
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=slughouse
+MYSQL_USER=root
+MYSQL_PASSWORD=secret
+MEDIA_ROOT=/absolute/path/to/td-audio/server/uploads
+MEDIA_BASE_URL=http://localhost:4000/media/
+ALLOWED_ORIGINS=http://localhost:3000
+PORT=4000
+```
+
+The server auto-creates `MEDIA_ROOT` if missing. For local dev, `MEDIA_BASE_URL` points to the Express static route.
+
+### 4. Database Schema
+
+```sql
+CREATE TABLE tracks (
+  id VARCHAR(36) PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  artist VARCHAR(255) NOT NULL,
+  audio_url TEXT NOT NULL,
+  audio_path TEXT,
+  cover_art TEXT,
+  duration INT DEFAULT 0,
+  added_at BIGINT NOT NULL
+);
+```
+
+### 5. Run locally
+
+```bash
+npm run dev                  # frontend on http://localhost:3000
+npm run dev --prefix server  # backend on http://localhost:4000
+```
+
+Upload a couple of MP3s from the admin panel—everyone hitting the dev URL shares the same playlist.
+
+## 🌐 Hostinger Deployment
+
+### Backend (Node.js on Hostinger)
+
+1. **Provision MySQL** via hPanel → Databases → MySQL Databases
+   - Note the host (e.g., `mysql1234.services.com`), database name, user, and password
+   - Run the schema SQL (see step 4 in Quick Start)
+
+2. **Create uploads directory** on the Hostinger filesystem
+   ```bash
+   mkdir -p /home/u792097907/uploads
+   chmod 755 /home/u792097907/uploads
+   ```
+   Expose via HTTPS (e.g., `https://playback.slughouse.com/uploads/` mapped in Apache/Nginx config or Hostinger's static file settings).
+
+3. **Deploy backend code**
+   - Upload `/server` via Git, FTP, or File Manager
+   - SSH into Hostinger and run:
+     ```bash
+     cd ~/server
+     npm install --production
+     ```
+   - Create `server/.env` with production values (see `server/.env.example`)
+
+4. **Keep backend running**
+   - Use PM2: `pm2 start src/index.js --name slughouse-api`
+   - Or systemd service if available
+   - Verify health: `curl https://your-backend-url.com/health`
+
+### Frontend (Surge or Static Host)
+
+1. **Set production API URL**
+   ```bash
+   echo "VITE_API_BASE_URL=https://your-backend-url.com" > .env.local
+   echo "VITE_ADMIN_TOKEN=your-shared-secret" >> .env.local  # optional
+   ```
+
+2. **Build and deploy**
+   ```bash
+   npm run build
+   npx surge ./dist https://slughouse.surge.sh
+   ```
+
+3. **Test end-to-end**
+   - Open `https://slughouse.surge.sh`
+   - Upload a track from admin panel (password: `admin`)
+   - Verify audio plays and all users see the same playlist
+
+## 🛠️ API Surface
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/tracks` | Returns ordered playlist |
+| `POST` | `/tracks` | Requires `multipart/form-data` (`file` + `id`, `title`, `artist`, etc.) |
+| `DELETE` | `/tracks/:id` | Removes metadata + deletes the uploaded file |
+
+Optional: set `ADMIN_TOKEN` on the server to require `x-admin-token` header. The frontend reads `VITE_ADMIN_TOKEN` and sends it automatically.
+
+## 🎮 Usage
+
+- Open the settings cog to access the admin modal (default password `admin`)
+- Upload audio + metadata, reorder with drag handles, delete with the trash icon
+- Player supports shuffle, repeat, keyboard shortcuts, and shareable invite links (footer button)
+
+## 🏗️ Build Scripts
+
+```bash
+npm run build                 # frontend → dist/
+npm run preview               # preview static build
+npm run start --prefix server # start backend without file watching
+```
+
+## 🐛 Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `Request failed` when uploading | Confirm `server/.env` values, ensure backend is reachable from the browser, and that `MEDIA_ROOT` is writable |
+| Tracks appear but audio 404s | `MEDIA_BASE_URL` must point to a public URL that maps to `MEDIA_ROOT` (include trailing slash) |
+| `Unauthorized` from API | Either remove `ADMIN_TOKEN` on the server or set the same value in `VITE_ADMIN_TOKEN` before building |
+| Playlist empty | Check MySQL credentials + table schema, restart backend to see any connection errors in logs |
+| Files not deleted | Ensure the backend process has permission to unlink files inside `MEDIA_ROOT` |
+
+## 🤝 Contributing
+
+1. Fork repo
+2. `git checkout -b feature/something`
+3. Commit + push + open PR
+
+## 📝 License
+
+MIT – feel free to adapt for your own private listening rooms.
+
+## 🙏 Credits
+
+- React + TypeScript + Vite
+- Express & Multer for the API
+- Lucide icons & Framer Motion for the vibe
+
+---
+
+**🏠 Slughouse Records** – *Keep it close*

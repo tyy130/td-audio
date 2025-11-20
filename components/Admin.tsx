@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { Track } from '../types';
 import { Reorder, useDragControls } from 'framer-motion';
 import { Trash2, GripVertical, Music, Sparkles, Upload, Lock, ArrowRight } from 'lucide-react';
-import { generateTrackDescription } from '../services/gemini';
 import { saveTrack, deleteTrack } from '../services/storage';
 import { DEFAULT_COVER } from '../constants';
 
@@ -95,29 +94,22 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
     setIsUploading(true);
 
     const id = crypto.randomUUID();
-    
-    // Generate AI description automatically
-    let description = "Just added.";
-    try {
-        description = await generateTrackDescription(newTrackTitle, newTrackArtist);
-    } catch (err) {
-        console.warn("AI generation skipped");
-    }
-
-    const newTrack: Track = {
+    const metadata = {
       id,
       title: newTrackTitle || "Untitled",
       artist: newTrackArtist || "Unknown",
-      fileHandle: file, // Store the file object for IDB
-      src: URL.createObjectURL(file), // Temporary URL for immediate playback
-      duration: 0, // Ideally we'd read metadata here, skipping for brevity
+      duration: 0,
       addedAt: Date.now(),
-      coverArt: DEFAULT_COVER,
-      description
+      coverArt: DEFAULT_COVER
     };
 
-    await saveTrack(newTrack);
-    setTracks(prev => [...prev, newTrack]);
+    try {
+      const savedTrack = await saveTrack(metadata, file);
+      setTracks(prev => [...prev, savedTrack]);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload track. Confirm the API URL and Hostinger backend are reachable.');
+    }
     
     // Reset form
     setNewTrackTitle('');
@@ -127,35 +119,46 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
   };
 
   const handleDelete = async (id: string) => {
-      await deleteTrack(id);
-      setTracks(prev => prev.filter(t => t.id !== id));
+      const track = tracks.find(t => t.id === id);
+      if (!track) return;
+      try {
+        await deleteTrack(track);
+        setTracks(prev => prev.filter(t => t.id !== id));
+      } catch (err) {
+        console.error(err);
+        alert('Unable to delete track from the server.');
+      }
   };
 
-  if (!isAuthenticated) {
+    if (!isAuthenticated) {
       return (
-          <div className="flex items-center justify-center h-full w-full bg-black">
-              <div className="w-full max-w-sm p-8 bg-neutral-900 rounded-2xl border border-neutral-800 text-center">
+        <div className="relative flex items-center justify-center min-h-screen w-full bg-gradient-to-b from-black via-[#050011] to-black py-16 px-4">
+          <div className="absolute inset-0 pointer-events-none opacity-60">
+            <div className="absolute top-10 left-1/2 -translate-x-1/2 w-72 h-72 bg-indigo-600/30 blur-[140px]"></div>
+            <div className="absolute bottom-0 right-12 w-64 h-64 bg-purple-600/20 blur-[130px]"></div>
+          </div>
+          <div className="relative w-full max-w-sm p-8 bg-neutral-950 rounded-2xl border border-white/5 text-center shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
                   <div className="w-12 h-12 bg-neutral-800 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-500">
                       <Lock size={20} />
                   </div>
-                  <h2 className="text-2xl font-bold text-white mb-2">Admin Access</h2>
-                  <p className="text-neutral-500 mb-6">Enter password to manage library</p>
+            <h2 className="text-2xl font-bold text-white mb-2 tracking-wide">Admin Access</h2>
+            <p className="text-neutral-400 text-sm uppercase tracking-[0.35em] mb-6">vault credentials</p>
                   <form onSubmit={handleLogin} className="space-y-4">
                       <input 
                           type="password" 
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Password"
-                          className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full bg-black/80 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
                       />
                       <button 
                           type="submit"
-                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
                       >
                           Login <ArrowRight size={16} />
                       </button>
                   </form>
-                  <button onClick={onClose} className="mt-6 text-sm text-neutral-600 hover:text-neutral-400">
+            <button onClick={onClose} className="mt-6 text-sm text-neutral-500 hover:text-white">
                       Cancel and go back
                   </button>
               </div>
@@ -222,7 +225,7 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
             </button>
         </div>
         <p className="text-xs text-neutral-600 mt-4">
-          * Tracks are stored in your browser's database. Gemini 2.5 Flash generates descriptions automatically.
+          * Tracks upload directly to the Hostinger vault via the API.
         </p>
       </div>
 

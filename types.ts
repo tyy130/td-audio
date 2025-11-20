@@ -2,12 +2,11 @@ export interface Track {
   id: string;
   title: string;
   artist: string;
-  src: string; // Blob URL or Remote URL
-  fileHandle?: File; // For internal IDB storage logic
+  src: string; // Remote URL
   duration: number;
   coverArt?: string;
-  description?: string;
   addedAt: number;
+  storagePath?: string;
 }
 
 export enum AppView {
@@ -15,10 +14,18 @@ export enum AppView {
   ADMIN = 'ADMIN',
 }
 
+export type RepeatMode = 'off' | 'all' | 'one';
+
 export interface PlayerState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
   volume: number;
   isMuted: boolean;
+}
+
+export interface PersistentSettings {
+  volume: number;
+  shuffle: boolean;
+  repeatMode: RepeatMode;
 }

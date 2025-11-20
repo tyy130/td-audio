@@ -1,0 +1,171 @@
+# Backend Deployment to Hostinger
+
+## Prerequisites
+- Hostinger hosting account with Node.js support
+- SSH access to your Hostinger server
+- MySQL database provisioned via hPanel
+
+## Step-by-Step Deployment
+
+### 1. Database Setup
+
+Log into hPanel → Databases → MySQL Databases and run this schema:
+
+```sql
+CREATE TABLE tracks (
+  id VARCHAR(36) PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  artist VARCHAR(255) NOT NULL,
+  audio_url TEXT NOT NULL,
+  audio_path TEXT,
+  cover_art TEXT,
+  duration INT DEFAULT 0,
+  added_at BIGINT NOT NULL
+);
+```
+
+Note your:
+- MySQL host (e.g., `mysql1234.services.com`)
+- Database name (e.g., `u792097907_slughouse`)
+- Username (e.g., `u792097907_tdv`)
+- Password
+
+### 2. Create Uploads Directory
+
+SSH into Hostinger:
+
+```bash
+ssh u792097907@yourdomain.com
+mkdir -p ~/uploads
+chmod 755 ~/uploads
+```
+
+Configure your web server (Apache/Nginx) or Hostinger's static file mapping to serve `~/uploads` at a public URL like `https://slughouse.com/uploads/`.
+
+### 3. Upload Backend Code
+
+Option A: **Git** (recommended)
+```bash
+cd ~
+git clone https://github.com/tyy130/td-audio.git
+cd td-audio/server
+npm install --production
+```
+
+Option B: **FTP/File Manager**
+- Zip the `/server` directory locally
+- Upload via hPanel File Manager
+- Unzip on the server
+- Run `npm install --production` via SSH
+
+### 4. Configure Environment
+
+Create `server/.env` with your production values:
+
+```bash
+nano ~/td-audio/server/.env
+```
+
+Paste (adjust values):
+
+```dotenv
+MYSQL_HOST=mysql1234.services.com
+MYSQL_PORT=3306
+MYSQL_DATABASE=u792097907_slughouse
+MYSQL_USER=u792097907_tdv
+MYSQL_PASSWORD=your-actual-password
+MYSQL_CONN_LIMIT=10
+
+PORT=4000
+
+ALLOWED_ORIGINS=https://playback.slughouse.com,http://localhost:3000
+
+ADMIN_TOKEN=your-shared-secret-123
+
+MEDIA_ROOT=/home/u792097907/uploads
+MEDIA_BASE_URL=https://playback.slughouse.com/uploads/
+MAX_UPLOAD_BYTES=26214400
+```
+
+Save and exit (Ctrl+X, Y, Enter).
+
+### 5. Start the Server
+
+#### Using PM2 (recommended for persistence):
+
+```bash
+npm install -g pm2
+cd ~/td-audio/server
+pm2 start src/index.js --name slughouse-api
+pm2 save
+pm2 startup  # follow instructions to enable startup on reboot
+```
+
+#### Using Node directly:
+
+```bash
+cd ~/td-audio/server
+nohup node src/index.js > api.log 2>&1 &
+```
+
+### 6. Verify Health
+
+```bash
+curl http://localhost:4000/health
+# Should return: {"status":"ok"}
+```
+
+If you've configured a reverse proxy to expose port 4000 publicly:
+
+```bash
+curl https://your-backend-url.com/health
+```
+
+### 7. Configure Reverse Proxy (Optional)
+
+If you want `https://api.playback.slughouse.com` to point to your backend:
+
+**Apache** (`.htaccess` or VirtualHost):
+```apache
+ProxyPass /api http://localhost:4000
+ProxyPassReverse /api http://localhost:4000
+```
+
+**Nginx**:
+```nginx
+location /api {
+  proxy_pass http://localhost:4000;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+Or use Hostinger's Node.js app hosting if available (configure via hPanel).
+
+### 8. Monitor Logs
+
+```bash
+pm2 logs slughouse-api
+# or
+tail -f ~/td-audio/server/api.log
+```
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Port already in use | Change `PORT` in `.env` or kill existing process |
+| MySQL connection refused | Check `MYSQL_HOST` and firewall rules |
+| File upload fails | Verify `MEDIA_ROOT` permissions (chmod 755) |
+| CORS errors | Add frontend URL to `ALLOWED_ORIGINS` |
+| 502 Bad Gateway | Ensure Node process is running (`pm2 status`) |
+
+## Updating Code
+
+```bash
+cd ~/td-audio
+git pull origin main
+cd server
+npm install --production
+pm2 restart slughouse-api
+```

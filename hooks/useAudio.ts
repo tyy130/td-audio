@@ -1,15 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export const useAudio = (src: string, onEnded?: () => void) => {
+export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, initialVolume = 1) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(initialVolume);
 
   useEffect(() => {
+    if (!src) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setIsPlaying(false);
+      setDuration(0);
+      setCurrentTime(0);
+      return;
+    }
+
     audioRef.current = new Audio(src);
     const audio = audioRef.current;
+    audio.loop = shouldLoop;
+    audio.volume = initialVolume;
 
     const setAudioData = () => {
       setDuration(audio.duration);
@@ -32,13 +43,19 @@ export const useAudio = (src: string, onEnded?: () => void) => {
       audio.removeEventListener('timeupdate', setAudioTime);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [src, onEnded]);
+    }, [src, onEnded, shouldLoop, initialVolume]);
 
   useEffect(() => {
       if(audioRef.current) {
           audioRef.current.volume = volume;
       }
   }, [volume]);
+
+    useEffect(() => {
+      if (audioRef.current) {
+        audioRef.current.loop = shouldLoop;
+      }
+    }, [shouldLoop]);
 
   const togglePlay = useCallback(() => {
     if (!audioRef.current) return;
