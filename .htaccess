@@ -1,0 +1,19 @@
+# Root .htaccess for playback
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "https://playback.slughouse.com"
+    Header set Access-Control-Allow-Methods "GET, POST, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, x-admin-token"
+</IfModule>
+
+# Ensure index.html is served for SPA
+DirectoryIndex index.html
+
+# PHP upload limits
+php_value upload_max_filesize 25M
+php_value post_max_size 26M
+php_value max_execution_time 300
+php_value max_input_time 300
+
+# Increase script memory if needed
+php_value memory_limit 128M
+
