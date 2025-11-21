@@ -10,13 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 
-$config = require __DIR__ . '/config.php';
+// Load server-only config provided at deploy time (not committed to git)
 $config = require __DIR__ . '/config.php';
 define('DB_HOST', $config['DB_HOST']);
 define('DB_NAME', $config['DB_NAME']);
 define('DB_USER', $config['DB_USER']);
 define('DB_PASS', $config['DB_PASS']);
-define('ADMIN_TOKEN', '');
+define('ADMIN_TOKEN', $config['ADMIN_TOKEN'] ?? '');
 
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
 define('MEDIA_BASE_URL', getenv('MEDIA_BASE_URL') ?: 'https://playback.slughouse/uploads/');
