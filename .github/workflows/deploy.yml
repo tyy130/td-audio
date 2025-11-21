@@ -1,0 +1,47 @@
+name: Build and Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare SSH
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+
+      - name: Deploy to Hostinger via rsync
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          rsync -avz --delete -e "ssh -p ${PORT:-22} -o StrictHostKeyChecking=no" dist/ "${USER}@${HOST}:${REMOTE_PATH}/"
+          rsync -avz -e "ssh -p ${PORT:-22} -o StrictHostKeyChecking=no" --exclude 'config.php' api/ "${USER}@${HOST}:${REMOTE_PATH}/api/"
+
+      - name: Set permissions on remote
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "chmod -R 755 \"${REMOTE_PATH}\" || true"
