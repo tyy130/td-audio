@@ -161,6 +161,38 @@ tail -f ~/td-audio/server/api.log
 | 502 Bad Gateway | Ensure Node process is running (`pm2 status`) |
 
 ## Updating Code
+## Frontend (Vite) Deployment (Static)
+
+1. Build locally or in CI:
+
+```bash
+npm ci
+npm run build
+```
+
+2. Copy `dist` to Hostinger (to be served by the `playback` subdomain). Example using `rsync`:
+
+```bash
+rsync -avz --delete dist/ u792097907@ssh.hostinger.com:/home/u792097907/domains/slughouse.com/public_html/playback/
+```
+
+3. Copy PHP API files (do not overwrite `config.php` which contains DB credentials). Example:
+
+```bash
+rsync -avz --exclude 'config.php' api/ u792097907@ssh.hostinger.com:/home/u792097907/domains/slughouse.com/public_html/playback/api/
+```
+
+4. Set the playback subdomain `playback.slughouse.com` root path in Hostinger to `/public_html/playback` if you want the app to be hosted at `https://playback.slughouse.com/` (recommended).
+
+5. Verify the site:
+
+```bash
+curl -I https://playback.slughouse.com/
+curl -I https://playback.slughouse.com/api/health
+```
+
+6. If the frontend shows a blank page, check that `index.html` path references the correct asset path (via `VITE_BASE_URL` or `vite.config.ts` base setting). Typical fix: set Vite base to `'/'` for subdomain root deployments.
+
 
 ```bash
 cd ~/td-audio
