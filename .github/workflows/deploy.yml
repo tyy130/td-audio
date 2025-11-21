@@ -97,4 +97,15 @@ jobs:
             exit 1
           fi
 
+      - name: Verify config on remote (permissions)
+        if: ${{ secrets.HOSTINGER_DB_PASS }}
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          echo "Checking config.php exists and permissions on remote"
+          ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "set -e; if [ ! -f '${REMOTE_PATH}/api/config.php' ]; then echo 'config.php missing' >&2; exit 1; fi; perms=$(stat -c '%a' '${REMOTE_PATH}/api/config.php'); if [ "$perms" != "600" ]; then echo 'config.php permissions are not 600. Found: ' $perms >&2; exit 1; fi; echo 'config.php present with correct permissions'"
+
       # config.php is created/written by the deploy script when secrets are provided
