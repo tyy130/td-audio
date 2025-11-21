@@ -13,6 +13,14 @@ Add the following secrets to the repository (Settings → Secrets → Actions):
 - `PLAYBACK_SITE_URL` — The site URL for verification (e.g., `https://playback.slughouse.com`).
 - `VITE_BASE_URL` — Optional: set to `/playback/` if you deploy to a sub-path; otherwise keep blank to use `/`.
 
+Optional secrets for automated server-side config creation
+- `HOSTINGER_DB_HOST` — Database host for the API (e.g., `srv995.hstgr.io`).
+- `HOSTINGER_DB_NAME` — Database name for the API.
+- `HOSTINGER_DB_USER` — Database user used by the API.
+- `HOSTINGER_DB_PASS` — Database password for the API user.
+
+If you set the `HOSTINGER_DB_PASS` secret, the workflow will create `api/config.php` on the host at deploy time using these secrets (the workflow will still exclude `api/config.php` from the repo). If you prefer manual control, do not add these secrets and instead create `api/config.php` manually directly on the server (see `HOSTINGER_DEPLOY.md`).
+
 ## Creating an SSH key (if needed)
 If you don't already have an SSH key for automated deployments, generate one and add the public key to Hostinger's SSH keys in hPanel.
 
