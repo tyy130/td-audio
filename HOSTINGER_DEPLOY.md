@@ -102,6 +102,25 @@ nano api/config.php # update credentials
 - If credentials were committed to Git history, **rotate the credentials** in the Hostinger dashboard immediately.
 - If you need to remove secrets from Git history, use `git filter-repo` or BFG and then force push — but this rewrites history and will affect forks and PRs.
 
+### Optional: write `api/config.php` from env vars with `scripts/deploy.sh`
+
+If you prefer an automated, safe approach that writes `api/config.php` from CI secrets or from your machine, use the `--write-config` flag on the included `scripts/deploy.sh`.
+
+Example (CI invocation or manually with environment variables):
+
+```bash
+HOSTINGER_DB_HOST=srv995.hstgr.io \
+HOSTINGER_DB_NAME=u792097907_slughouse \
+HOSTINGER_DB_USER=u792097907_tdv \
+HOSTINGER_DB_PASS='your-db-pass' \
+HOSTINGER_ADMIN_TOKEN='optional-admin-token' \
+./scripts/deploy.sh playback.slughouse.com u792097907 /home/u792097907/domains/slughouse.com/public_html/playback 65002 --write-config --force
+```
+
+This will:
+- Safely create a temp config file locally (with 600 perms), rsync it to the host as `config.php.tmp`, atomically rename it to `config.php`, backup an existing `config.php` to `config.php.bak.<timestamp>`, and set `chmod 600` on the remote file.
+- If a remote `api/config.php` exists and you don't pass `--force`, the script will abort rather than overwrite to avoid accidental secrets replacement.
+
 ### 5. Start the Server
 
 #### Using PM2 (recommended for persistence):

@@ -21,6 +21,27 @@ Optional secrets for automated server-side config creation
 
 If you set the `HOSTINGER_DB_PASS` secret, the workflow will create `api/config.php` on the host at deploy time using these secrets (the workflow will still exclude `api/config.php` from the repo). If you prefer manual control, do not add these secrets and instead create `api/config.php` manually directly on the server (see `HOSTINGER_DEPLOY.md`).
 
+If you'd like to use the `scripts/deploy.sh` helper to write server-side config, use the `--write-config` flag and in CI pass the DB secrets as env variables to the step. Example step (calls the script and safely writes `api/config.php` to the host):
+
+```yaml
+- name: Deploy and write config (optional)
+	if: ${{ secrets.HOSTINGER_DB_PASS }}
+	env:
+		HOST: ${{ secrets.HOSTINGER_HOST }}
+		USER: ${{ secrets.HOSTINGER_USER }}
+		REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+		PORT: ${{ secrets.HOSTINGER_PORT }}
+		HOSTINGER_DB_HOST: ${{ secrets.HOSTINGER_DB_HOST }}
+		HOSTINGER_DB_NAME: ${{ secrets.HOSTINGER_DB_NAME }}
+		HOSTINGER_DB_USER: ${{ secrets.HOSTINGER_DB_USER }}
+		HOSTINGER_DB_PASS: ${{ secrets.HOSTINGER_DB_PASS }}
+		HOSTINGER_ADMIN_TOKEN: ${{ secrets.HOSTINGER_ADMIN_TOKEN }}
+	run: |
+		./scripts/deploy.sh "${{ secrets.HOSTINGER_HOST }}" "${{ secrets.HOSTINGER_USER }}" "${{ secrets.HOSTINGER_REMOTE_PATH }}" "${{ secrets.HOSTINGER_PORT }}" --write-config --force
+```
+
+Note: The `--force` option forces overwriting a potentially-existing `api/config.php` file. It's recommended to rotate secrets (DB or admin) before enabling this, and restrict the scope of the `HOSTINGER_SSH_PRIVATE_KEY` to the deployment user to reduce blast radius.
+
 ## Creating an SSH key (if needed)
 If you don't already have an SSH key for automated deployments, generate one and add the public key to Hostinger's SSH keys in hPanel.
 
