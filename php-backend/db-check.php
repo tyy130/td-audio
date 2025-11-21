@@ -6,7 +6,7 @@ header('Content-Type: application/json');
 $host = getenv('DB_HOST') ?: 'srv995.hstgr.io';
 $db = getenv('DB_NAME') ?: 'u792097907_slug_dev';
 $user = getenv('DB_USER') ?: 'u792097907_slug_user';
-$pass = getenv('DB_PASS') ?: 'QYw?A#bOQnS';
+$pass = getenv('DB_PASS') ?: '';
 
 try {
     $pdo = new PDO("mysql:host={$host};dbname={$db};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

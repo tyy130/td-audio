@@ -16,7 +16,8 @@ define('DB_HOST', getenv('DB_HOST') ?: 'srv995.hstgr.io');
 define('DB_NAME', getenv('DB_NAME') ?: 'u792097907_slug_dev');
 define('DB_USER', getenv('DB_USER') ?: 'u792097907_slug_user');
 // Read DB_PASS from environment if set; otherwise fall back to literal
-define('DB_PASS', getenv('DB_PASS') ?: 'QYw?A#bOQnS');
+// DB_PASS must be set via environment variables or a server-side config file
+define('DB_PASS', getenv('DB_PASS') ?: '');
 define('ADMIN_TOKEN', ''); // Optional: set to match frontend VITE_ADMIN_TOKEN
 
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
@@ -36,9 +37,10 @@ function getDb() {
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                  PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
             );
+            // If DB_PASS is blank or invalid, throw a helpful error
         } catch (PDOException $e) {
             http_response_code(500);
-            die(json_encode(['message' => 'Database connection failed']));
+            die(json_encode(['message' => 'Database connection failed: please ensure DB_HOST/DB_NAME/DB_USER/DB_PASS are configured on the server']));
         }
     }
     return $pdo;

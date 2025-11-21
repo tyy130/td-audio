@@ -12,7 +12,7 @@ Set environment variables via `.htaccess` or Hostinger control panel:
 SetEnv DB_HOST srv995.hstgr.io
 SetEnv DB_NAME u792097907_slug_dev
 SetEnv DB_USER u792097907_slug_user
-SetEnv DB_PASS QYw?A#bOQnS
+SetEnv DB_PASS YOUR_DB_PASSWORD_HERE
 SetEnv ADMIN_TOKEN your-secret
 SetEnv MEDIA_BASE_URL https://playback.slughouse.com/uploads/
 ```
