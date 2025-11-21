@@ -172,6 +172,43 @@ tail -f ~/td-audio/server/api.log
 | File upload fails | Verify `MEDIA_ROOT` permissions (chmod 755) |
 | CORS errors | Add frontend URL to `ALLOWED_ORIGINS` |
 | 502 Bad Gateway | Ensure Node process is running (`pm2 status`) |
+### Deployment failure: "untracked files would be overwritten"
+
+If Hostinger's Git deploy runs `git pull` and fails with an error like:
+
+```
+pull: error: The following untracked working tree files would be overwritten by merge:
+  db.test.php
+Please move or remove them before you merge.
+Aborting
+```
+
+This happens when the remote file is untracked but the repo now contains a tracked file with the same name. To resolve:
+
+1. SSH into your Hostinger server and move or backup the untracked files before pulling:
+
+```bash
+ssh u792097907@<HOST>
+cd /home/u792097907/domains/slughouse.com/public_html/playback
+mkdir -p ~/playback_backup/$(date +%Y%m%d%H%M%S)
+mv db.test.php ~/playback_backup/$(date +%Y%m%d%H%M%S)/
+git pull origin main
+```
+
+2. Safer automated approach (recommended): Use rsync-based deployment in CI (GitHub Actions) instead of Hostinger's Git deploy to avoid many `git pull` conflicts. See `GITHUB_ACTIONS_SETUP.md` for details.
+
+3. If you need to preserve server local changes that you do not want to be overwritten, move them into a separate filename `db.test.local.php` and add that pattern to `.gitignore` to prevent conflicts.
+
+4. If you need to clean *all* untracked files on the server before pulling (risky), you can run:
+
+```bash
+# Be careful - this deletes untracked files permanently!
+git clean -fd
+git pull origin main
+```
+
+Alternatively, run the helper script `scripts/host_cleanup.sh` from the server to safely back up untracked files and reset to `origin/main` (see the repo `scripts/` directory).
+
 
 ## Updating Code
 ## Frontend (Vite) Deployment (Static)
