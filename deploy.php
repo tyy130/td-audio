@@ -1,7 +1,7 @@
 <?php
 // Simple GitHub webhook deploy script for Hostinger
 
-$secret = 'REPLACE_WITH_A_STRONG_SECRET'; // Set a strong secret and use it in your webhook
+$secret = '482915736204187659321'; // Set a strong secret and use it in your webhook
 
 // Validate secret if sent as a header (recommended)
 if (!isset($_SERVER['HTTP_X_HUB_SIGNATURE'])) {
