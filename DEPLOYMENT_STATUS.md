@@ -3,7 +3,7 @@
 ## ✅ Completed
 
 ### Frontend
-- **URL**: https://playback.slughouse.com
+-- **URL**: https://playback.slughouse
 - **Status**: ✅ Live and deployed (343.4 KB)
 - **Build**: Production-ready Vite bundle
 - **Storage Service**: Points to REST API (with localhost fallback for dev)
@@ -181,8 +181,8 @@ cd server && npm run dev
 ```
 
 ### Production URLs
-- **Frontend**: https://playback.slughouse.com (✅ deployed)
-- **Backend**: https://api.playback.slughouse.com (⏳ pending)
+-- **Frontend**: https://playback.slughouse (✅ deployed)
+-- **Backend**: https://api.playback.slughouse (⏳ pending)
 - **Uploads**: https://playback.slughouse.com/uploads/ (⏳ pending)
 
 ## Next Step

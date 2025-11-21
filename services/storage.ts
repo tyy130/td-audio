@@ -6,7 +6,8 @@ const resolveDefaultApi = () => {
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:4000';
   }
-  return '';
+  // Default for production when frontend is deployed under /playback - backend API lives at /playback/api
+  return '/playback/api';
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApi()).replace(/\/$/, '');

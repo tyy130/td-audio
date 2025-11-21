@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 Open in browser:
 ```
-https://playback.slughouse.com/api/health
+https://playback.slughouse/api/health
 ```
 
 Should see:
@@ -64,14 +64,14 @@ In your codespace terminal:
 ```bash
 # Create env file
 cat > .env.local << 'EOF'
-VITE_API_BASE_URL=https://playback.slughouse.com/api
+VITE_API_BASE_URL=https://playback.slughouse/api
 EOF
 
 # Rebuild
 npm run build
 
 # Redeploy
-npx surge ./dist https://playback.slughouse.com
+npx surge ./dist https://playback.slughouse
 ```
 
 ## ✅ Step 5: Test End-to-End (1 minute)

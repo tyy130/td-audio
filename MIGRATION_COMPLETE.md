@@ -36,7 +36,7 @@
 ## Deployment Status
 
 ### ✅ Frontend
-- **URL**: https://playback.slughouse.com
+-- **URL**: https://playback.slughouse
 - **Status**: Deployed successfully (343.4 KB, 3 files)
 - **Build**: Vite production build with REST storage
 
@@ -68,7 +68,7 @@ MYSQL_DATABASE=u792097907_slughouse
 MYSQL_USER=u792097907_tdv
 MYSQL_PASSWORD=your-password
 MEDIA_ROOT=/home/u792097907/uploads
-MEDIA_BASE_URL=https://playback.slughouse.com/uploads/
+MEDIA_BASE_URL=https://playback.slughouse/uploads/
 ALLOWED_ORIGINS=https://playback.slughouse.com
 ADMIN_TOKEN=optional-shared-secret
 PORT=4000
@@ -102,7 +102,7 @@ CREATE TABLE tracks (
 
 Once backend is deployed:
 
-- [ ] Frontend loads at https://playback.slughouse.com
+- [ ] Frontend loads at https://playback.slughouse
 - [ ] Admin panel accepts password (`admin`)
 - [ ] Upload MP3 file with metadata
 - [ ] Track appears in player queue

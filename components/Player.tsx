@@ -324,13 +324,13 @@ const Player: React.FC<PlayerProps> = ({
         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-neutral-600">
             <span className="hidden md:inline">{isShuffle ? 'Shuffle on' : 'Shuffle off'} · Repeat {repeatMode}</span>
             <div className="ml-auto flex items-center gap-3">
-              <a 
-                href="https://playback.slughouse.com" 
+            <a 
+              href="https://playback.slughouse" 
                 target="_blank" 
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-neutral-300 hover:text-white text-xs font-semibold"
               >
-                playback.slughouse.com <ExternalLink size={14} />
+              playback.slughouse <ExternalLink size={14} />
               </a>
               <span className="text-[0.6rem] tracking-[0.45em] text-white/40">keep it close</span>
             </div>

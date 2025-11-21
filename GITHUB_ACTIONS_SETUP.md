@@ -8,9 +8,9 @@ Add the following secrets to the repository (Settings → Secrets → Actions):
 - `HOSTINGER_SSH_PRIVATE_KEY` — SSH private key for the host user (for example `u792097907@ssh.hostinger.com`). This must be the private key (no passphrase is preferred for automation).
 - `HOSTINGER_HOST` — The SSH host (e.g., `ssh.hostinger.com` or the IP address).
 - `HOSTINGER_USER` — The SSH username (e.g., `u792097907`).
-- `HOSTINGER_REMOTE_PATH` — The remote directory where your `playback` site is hosted (e.g., `/home/u792097907/domains/slughouse.com/public_html/playback`).
+- `HOSTINGER_REMOTE_PATH` — The remote directory where your `playback` site is hosted (e.g., `/home/u792097907/domains/slughouse/public_html/playback`).
 - `HOSTINGER_PORT` — The SSH port (optional; default `22`).
-- `PLAYBACK_SITE_URL` — The site URL for verification (e.g., `https://playback.slughouse.com`).
+ - `PLAYBACK_SITE_URL` — The site URL for verification (e.g., `https://playback.slughouse`).
 - `VITE_BASE_URL` — Optional: set to `/playback/` if you deploy to a sub-path; otherwise keep blank to use `/`.
 
 Optional secrets for automated server-side config creation

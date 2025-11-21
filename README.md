@@ -36,6 +36,13 @@ return [
 3. Set correct credentials in `api/config.php`.
 4. Test `/api/db-check.php` and `/db.test.php` in browser.
 
+When deploying to Hostinger under `/playback`, the frontend assets and API are configured with the following defaults:
+
+- Vite `base` is set to `/playback/` in `vite.config.ts` when NODE_ENV is `production`.
+- The frontend will resolve API URLs to `/playback/api` by default unless `VITE_API_BASE_URL` is set.
+
+If your Hostinger site is on a different subpath (not `/playback`), update `vite.config.ts` and `VITE_API_BASE_URL` accordingly before building the project.
+
 ## Troubleshooting
 
 - If you see "Access denied" errors, check credentials and user permissions in Hostinger MySQL panel.
@@ -74,7 +81,7 @@ Private music vault for Slughouse Records. React + Vite front-end talks to a tin
 
 | Layer | Stack | Notes |
 | --- | --- | --- |
-| Frontend | React 19 + Vite + TypeScript | Lives in `/` – static deploy to Surge (`playback.slughouse.com`) |
+| Frontend | React 19 + Vite + TypeScript | Lives in `/` – static deploy to Surge (`playback.slughouse`) |
 | Backend | Express 4 + MySQL2 + Multer | Lives in `/server` – deploy to Hostinger VPS / Node hosting |
 | Database | Hostinger MySQL | `tracks` table stores metadata + relative file path |
 | Storage | Hostinger file uploads | API writes into `MEDIA_ROOT`, served via `MEDIA_BASE_URL` |
@@ -161,7 +168,7 @@ Upload a couple of MP3s from the admin panel—everyone hitting the dev URL shar
    mkdir -p /home/u792097907/uploads
    chmod 755 /home/u792097907/uploads
    ```
-   Expose via HTTPS (e.g., `https://playback.slughouse.com/uploads/` mapped in Apache/Nginx config or Hostinger's static file settings).
+   Expose via HTTPS (e.g., `https://playback.slughouse/uploads/` mapped in Apache/Nginx config or Hostinger's static file settings).
 
 3. **Deploy backend code**
    - Upload `/server` via Git, FTP, or File Manager

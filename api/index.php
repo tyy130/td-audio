@@ -19,7 +19,7 @@ define('DB_PASS', $config['DB_PASS']);
 define('ADMIN_TOKEN', '');
 
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
-define('MEDIA_BASE_URL', getenv('MEDIA_BASE_URL') ?: 'https://playback.slughouse.com/uploads/');
+define('MEDIA_BASE_URL', getenv('MEDIA_BASE_URL') ?: 'https://playback.slughouse/uploads/');
 define('MAX_UPLOAD_BYTES', getenv('MAX_UPLOAD_BYTES') ?: 26214400);
 
 if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);

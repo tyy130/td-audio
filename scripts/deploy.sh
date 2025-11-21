@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage: ./scripts/deploy.sh <remote-host> <remote-user> <remote-path> [ssh-port]
-# Example: ./scripts/deploy.sh example.hostinger.com u792097907 /home/u792097907/domains/slughouse.com/public_html/playback 22
+# Example: ./scripts/deploy.sh example.hostinger.com u792097907 /home/u792097907/domains/slughouse/public_html/playback 22
 
 HOST=${1:?Host required}
 USER=${2:?User required}
@@ -23,4 +23,4 @@ rsync -avz -e "ssh -p $PORT -o StrictHostKeyChecking=no" --exclude 'config.php' 
 # Ensure proper permissions on remote files
 ssh -p $PORT -o StrictHostKeyChecking=no "$USER@$HOST" "chmod -R 755 '$REMOTE_PATH' || true"
 
-echo "Deployment complete. Verify playback at: https://playback.slughouse.com/"
+echo "Deployment complete. Verify playback at: https://playback.slughouse/"
