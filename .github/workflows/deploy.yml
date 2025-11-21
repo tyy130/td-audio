@@ -42,17 +42,34 @@ jobs:
         run: |
           ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "mkdir -p \"${REMOTE_PATH}\" && mkdir -p \"${REMOTE_PATH}/api\""
 
-      - name: Deploy to Hostinger via deploy script
+      - name: Deploy to Hostinger via deploy script (with config)
+        if: ${{ secrets.HOSTINGER_DB_PASS }}
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+          HOSTINGER_DB_HOST: ${{ secrets.HOSTINGER_DB_HOST }}
+          HOSTINGER_DB_NAME: ${{ secrets.HOSTINGER_DB_NAME }}
+          HOSTINGER_DB_USER: ${{ secrets.HOSTINGER_DB_USER }}
+          HOSTINGER_DB_PASS: ${{ secrets.HOSTINGER_DB_PASS }}
+          HOSTINGER_ADMIN_TOKEN: ${{ secrets.HOSTINGER_ADMIN_TOKEN }}
+        run: |
+          # Run the deploy script which can optionally write config.php atomically.
+          # Skip build because we've already built in CI
+          chmod +x ./scripts/deploy.sh
+          ./scripts/deploy.sh "${{ secrets.HOSTINGER_HOST }}" "${{ secrets.HOSTINGER_USER }}" "${{ secrets.HOSTINGER_REMOTE_PATH }}" "${{ secrets.HOSTINGER_PORT }}" --skip-build --write-config --force
+
+      - name: Deploy to Hostinger via deploy script (no config)
+        if: ${{ !secrets.HOSTINGER_DB_PASS }}
         env:
           HOST: ${{ secrets.HOSTINGER_HOST }}
           USER: ${{ secrets.HOSTINGER_USER }}
           REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
           PORT: ${{ secrets.HOSTINGER_PORT }}
         run: |
-          # Run the deploy script which can optionally write config.php atomically.
-          # Skip build because we've already built in CI
           chmod +x ./scripts/deploy.sh
-          ./scripts/deploy.sh "${{ secrets.HOSTINGER_HOST }}" "${{ secrets.HOSTINGER_USER }}" "${{ secrets.HOSTINGER_REMOTE_PATH }}" "${{ secrets.HOSTINGER_PORT }}" --skip-build --write-config --force
+          ./scripts/deploy.sh "${{ secrets.HOSTINGER_HOST }}" "${{ secrets.HOSTINGER_USER }}" "${{ secrets.HOSTINGER_REMOTE_PATH }}" "${{ secrets.HOSTINGER_PORT }}" --skip-build
 
       - name: Set permissions on remote
         env:
