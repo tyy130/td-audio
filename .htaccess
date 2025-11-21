@@ -17,3 +17,10 @@ php_value max_input_time 300
 # Increase script memory if needed
 php_value memory_limit 128M
 
+# Route /api/* to api/index.php
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+</IfModule>
+
