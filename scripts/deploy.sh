@@ -42,6 +42,13 @@ echo "Syncing built files to $USER@$HOST:$REMOTE_PATH"
 # Upload dist contents to remote playback root
 rsync -avz --delete -e "ssh -p $PORT -o StrictHostKeyChecking=no" dist/ "$USER@$HOST:$REMOTE_PATH/"
 
+# Copy repo-level .htaccess into the deployed folder (if present). When deploying
+# Vite/SPA builds, we still need to ensure the server's rewrite rules are present.
+if [ -f ".htaccess" ]; then
+	echo "Uploading root .htaccess to ensure rewrite rules and PHP headers are present"
+	rsync -avz -e "ssh -p $PORT -o StrictHostKeyChecking=no" .htaccess "$USER@$HOST:$REMOTE_PATH/.htaccess"
+fi
+
 # Upload API PHP files (exclude config.php) so we don't overwrite credentials
 rsync -avz -e "ssh -p $PORT -o StrictHostKeyChecking=no" --exclude 'config.php' api/ "$USER@$HOST:$REMOTE_PATH/api/"
 
