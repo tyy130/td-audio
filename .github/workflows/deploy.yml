@@ -21,7 +21,7 @@ jobs:
 
       - name: Build
         env:
-          VITE_BASE_URL: ${{ secrets.VITE_BASE_URL || '' }}
+          VITE_BASE_URL: ${{ secrets.VITE_BASE_URL }}
         run: |
           if [ -n "${VITE_BASE_URL}" ]; then
             echo "Using VITE_BASE_URL=${VITE_BASE_URL}"
