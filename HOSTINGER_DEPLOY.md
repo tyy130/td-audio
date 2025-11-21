@@ -89,6 +89,19 @@ MAX_UPLOAD_BYTES=26214400
 
 Save and exit (Ctrl+X, Y, Enter).
 
+### Secrets management (VERY IMPORTANT)
+
+- **Do not commit** `api/config.php` to Git. This file contains live DB credentials and must be kept out of the repository.
+- Keep `api/config.example.php` in the repo as a template; never include actual secrets in example files.
+- On the server, create `api/config.php` from the example and fill in production credentials:
+
+```bash
+cp api/config.example.php api/config.php
+nano api/config.php # update credentials
+```
+- If credentials were committed to Git history, **rotate the credentials** in the Hostinger dashboard immediately.
+- If you need to remove secrets from Git history, use `git filter-repo` or BFG and then force push — but this rewrites history and will affect forks and PRs.
+
 ### 5. Start the Server
 
 #### Using PM2 (recommended for persistence):

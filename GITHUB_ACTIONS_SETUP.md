@@ -33,6 +33,12 @@ Then add the private key contents to `HOSTINGER_SSH_PRIVATE_KEY` secret in GitHu
 - The workflow runs automatically when you push to `main`.
 - To test manually, trigger a push to `main` or use the GitHub UI in the ``Actions`` tab to run the workflow.
 
+## Secrets & server-side config
+
+- **Do not commit** `api/config.php` to the repository; the workflow intentionally excludes this file. Instead keep credentials on the server-side only.
+- Create a server-side `api/config.php` based on `api/config.example.php` and update credentials on the host.
+- If credentials were checked into the repository previously, rotate database credentials in Hostinger hPanel immediately.
+
 ## Post-setup checks
 - Verify the site is listening by visiting `PLAYBACK_SITE_URL` in a browser.
 - Verify the `api/health` endpoint is responding with `200`.
