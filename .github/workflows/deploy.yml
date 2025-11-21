@@ -77,3 +77,20 @@ jobs:
             echo "Deployment verification failed. Root=${HTTP_CODE_ROOT}, API=${HTTP_CODE_API}"
             exit 1
           fi
+
+      - name: Optionally create server-side config.php from secrets (optional)
+        if: ${{ secrets.HOSTINGER_DB_PASS }}
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+          DB_HOST: ${{ secrets.HOSTINGER_DB_HOST }}
+          DB_NAME: ${{ secrets.HOSTINGER_DB_NAME }}
+          DB_USER: ${{ secrets.HOSTINGER_DB_USER }}
+          DB_PASS: ${{ secrets.HOSTINGER_DB_PASS }}
+        run: |
+          echo "Creating api/config.php from secrets on the runner and pushing to host"
+          printf "<?php\nreturn [\n  'DB_HOST' => '%s',\n  'DB_NAME' => '%s',\n  'DB_USER' => '%s',\n  'DB_PASS' => '%s',\n];\n" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASS" > tmp_api_config.php
+          rsync -avz -e "ssh -p ${PORT:-22} -o StrictHostKeyChecking=no" tmp_api_config.php "${USER}@${HOST}:${REMOTE_PATH}/api/config.php"
+          rm -f tmp_api_config.php
