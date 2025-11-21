@@ -1,8 +1,9 @@
 <?php
-// Example config file. Copy to `api/config.php` and fill in your production DB credentials.
+// Example api/config.php for the PHP backend. Do NOT commit actual secrets to this repo.
 return [
-    'DB_HOST' => 'srv995.hstgr.io',
-    'DB_NAME' => 'u792097907_slughouse',
-    'DB_USER' => 'u792097907_tdv',
-    'DB_PASS' => 'your_db_password_here'
+  'DB_HOST' => 'srv995.hstgr.io',
+  'DB_NAME' => 'u792097907_slug_dev',
+  'DB_USER' => 'u792097907_slug_user',
+  'DB_PASS' => 'YOUR_DB_PASSWORD',
+  'ADMIN_TOKEN' => ''
 ];
