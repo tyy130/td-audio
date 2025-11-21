@@ -1,6 +1,6 @@
 # Root .htaccess for playback
 <IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "https://playback.slughouse"
+    Header set Access-Control-Allow-Origin "https://playback.slughouse.com"
     Header set Access-Control-Allow-Methods "GET, POST, DELETE, OPTIONS"
     Header set Access-Control-Allow-Headers "Content-Type, x-admin-token"
 </IfModule>
