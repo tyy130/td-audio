@@ -7,12 +7,15 @@ set -euo pipefail
 # Parse options and positional args
 WRITE_CONFIG=0
 FORCE_WRITE=0
+SKIP_BUILD=0
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--write-config)
 			WRITE_CONFIG=1; shift;;
 		--force)
 			FORCE_WRITE=1; shift;;
+		--skip-build)
+			SKIP_BUILD=1; shift;;
 		--)
 			shift; break;;
 		-*)
@@ -27,9 +30,13 @@ USER=${2:?User required}
 REMOTE_PATH=${3:?Remote path required}
 PORT=${4:-22}
 
-echo "Building project..."
-npm ci --silent
-npm run build --silent
+if [ "$SKIP_BUILD" -eq 0 ]; then
+	echo "Building project..."
+	npm ci --silent
+	npm run build --silent
+else
+	echo "Skipping build (--skip-build passed)"
+fi
 
 echo "Syncing built files to $USER@$HOST:$REMOTE_PATH"
 # Upload dist contents to remote playback root

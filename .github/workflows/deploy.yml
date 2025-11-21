@@ -42,15 +42,17 @@ jobs:
         run: |
           ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "mkdir -p \"${REMOTE_PATH}\" && mkdir -p \"${REMOTE_PATH}/api\""
 
-      - name: Deploy to Hostinger via rsync
+      - name: Deploy to Hostinger via deploy script
         env:
           HOST: ${{ secrets.HOSTINGER_HOST }}
           USER: ${{ secrets.HOSTINGER_USER }}
           REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
           PORT: ${{ secrets.HOSTINGER_PORT }}
         run: |
-          rsync -avz --delete -e "ssh -p ${PORT:-22} -o StrictHostKeyChecking=no" dist/ "${USER}@${HOST}:${REMOTE_PATH}/"
-          rsync -avz -e "ssh -p ${PORT:-22} -o StrictHostKeyChecking=no" --exclude 'config.php' api/ "${USER}@${HOST}:${REMOTE_PATH}/api/"
+          # Run the deploy script which can optionally write config.php atomically.
+          # Skip build because we've already built in CI
+          chmod +x ./scripts/deploy.sh
+          ./scripts/deploy.sh "${{ secrets.HOSTINGER_HOST }}" "${{ secrets.HOSTINGER_USER }}" "${{ secrets.HOSTINGER_REMOTE_PATH }}" "${{ secrets.HOSTINGER_PORT }}" --skip-build --write-config --force
 
       - name: Set permissions on remote
         env:
