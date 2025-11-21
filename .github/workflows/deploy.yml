@@ -20,12 +20,27 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        env:
+          VITE_BASE_URL: ${{ secrets.VITE_BASE_URL || '' }}
+        run: |
+          if [ -n "${VITE_BASE_URL}" ]; then
+            echo "Using VITE_BASE_URL=${VITE_BASE_URL}"
+          fi
+          npm run build
 
       - name: Prepare SSH
         uses: webfactory/ssh-agent@v0.8.1
         with:
           ssh-private-key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+
+      - name: Create remote directory
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "mkdir -p \"${REMOTE_PATH}\" && mkdir -p \"${REMOTE_PATH}/api\""
 
       - name: Deploy to Hostinger via rsync
         env:
@@ -45,3 +60,20 @@ jobs:
           PORT: ${{ secrets.HOSTINGER_PORT }}
         run: |
           ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "chmod -R 755 \"${REMOTE_PATH}\" || true"
+
+      - name: Verify deployment
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USER: ${{ secrets.HOSTINGER_USER }}
+          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
+          SITE_URL: ${{ secrets.PLAYBACK_SITE_URL }}
+          PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          echo "Verifying ${SITE_URL} and ${SITE_URL}/api/health"
+          HTTP_CODE_ROOT=$(curl -sS -o /dev/null -w "%{http_code}" "${SITE_URL}/") || true
+          HTTP_CODE_API=$(curl -sS -o /dev/null -w "%{http_code}" "${SITE_URL}/api/health") || true
+          echo "Root status: ${HTTP_CODE_ROOT}, API status: ${HTTP_CODE_API}"
+          if [ "${HTTP_CODE_ROOT}" != "200" ] || [ "${HTTP_CODE_API}" != "200" ]; then
+            echo "Deployment verification failed. Root=${HTTP_CODE_ROOT}, API=${HTTP_CODE_API}"
+            exit 1
+          fi
