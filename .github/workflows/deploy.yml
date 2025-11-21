@@ -97,22 +97,4 @@ jobs:
             exit 1
           fi
 
-      - name: Optionally create server-side config.php from secrets (optional)
-        if: ${{ secrets.HOSTINGER_DB_PASS }}
-        env:
-          HOST: ${{ secrets.HOSTINGER_HOST }}
-          USER: ${{ secrets.HOSTINGER_USER }}
-          REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
-          PORT: ${{ secrets.HOSTINGER_PORT }}
-          DB_HOST: ${{ secrets.HOSTINGER_DB_HOST }}
-          DB_NAME: ${{ secrets.HOSTINGER_DB_NAME }}
-          DB_USER: ${{ secrets.HOSTINGER_DB_USER }}
-          DB_PASS: ${{ secrets.HOSTINGER_DB_PASS }}
-          ADMIN_TOKEN: ${{ secrets.HOSTINGER_ADMIN_TOKEN }}
-        run: |
-          echo "Creating api/config.php from secrets on the runner and pushing to host safely"
-          printf "<?php\nreturn [\n  'DB_HOST' => '%s',\n  'DB_NAME' => '%s',\n  'DB_USER' => '%s',\n  'DB_PASS' => '%s',\n  'ADMIN_TOKEN' => '%s',\n];\n" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASS" "$ADMIN_TOKEN" > tmp_api_config.php
-          chmod 600 tmp_api_config.php
-          rsync -avz -e "ssh -p ${PORT:-22} -o StrictHostKeyChecking=no" tmp_api_config.php "${USER}@${HOST}:${REMOTE_PATH}/api/config.php.tmp"
-          ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "mkdir -p '${REMOTE_PATH}/api' && if [ -f '${REMOTE_PATH}/api/config.php' ]; then mv '${REMOTE_PATH}/api/config.php' '${REMOTE_PATH}/api/config.php.bak.$(date +%s)'; fi && mv '${REMOTE_PATH}/api/config.php.tmp' '${REMOTE_PATH}/api/config.php' && chmod 600 '${REMOTE_PATH}/api/config.php' || true"
-          shred -u tmp_api_config.php || rm -f tmp_api_config.php
+      # config.php is created/written by the deploy script when secrets are provided
