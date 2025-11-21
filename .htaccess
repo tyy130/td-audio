@@ -27,6 +27,9 @@ SetEnv DB_PASS ;pC6vaIz
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
+    # If the root is requested, redirect to the playback subfolder where built site lives
+    RewriteCond %{REQUEST_URI} ^/$
+    RewriteRule ^$ /playback/ [R=302,L]
     RewriteRule ^api/(.*)$ api/index.php [QSA,L]
 </IfModule>
 
