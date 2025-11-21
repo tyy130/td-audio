@@ -1,6 +1,4 @@
-<?php
-// Slughouse Records API - Hostinger Shared Hosting (moved to /api)
-// Deploy to: /public_html/playback/api/index.php
+
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: https://playback.slughouse.com');
@@ -12,13 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 
-// Load DB credentials from config.php (Hostinger shared hosting)
+$config = require __DIR__ . '/config.php';
 $config = require __DIR__ . '/config.php';
 define('DB_HOST', $config['DB_HOST']);
 define('DB_NAME', $config['DB_NAME']);
 define('DB_USER', $config['DB_USER']);
 define('DB_PASS', $config['DB_PASS']);
-define('ADMIN_TOKEN', ''); // Optional: set to match frontend VITE_ADMIN_TOKEN
+define('ADMIN_TOKEN', '');
 
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
 define('MEDIA_BASE_URL', getenv('MEDIA_BASE_URL') ?: 'https://playback.slughouse.com/uploads/');

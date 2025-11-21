@@ -17,6 +17,12 @@ php_value max_input_time 300
 # Increase script memory if needed
 php_value memory_limit 128M
 
+# Hostinger MySQL connection (for PHP backend)
+SetEnv DB_HOST srv995.hstgr.io
+SetEnv DB_NAME u792097907_slughouse
+SetEnv DB_USER u792097907_tdv
+SetEnv DB_PASS ;pC6vaIz
+
 # Route /api/* to api/index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On

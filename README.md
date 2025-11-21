@@ -1,3 +1,54 @@
+# TD Audio Player Backend (PHP)
+
+## Overview
+This backend provides a REST API for the Slughouse Records music player, running on Hostinger shared hosting with MySQL. It supports track uploads, listing, and deletion, and is designed for use with the React frontend.
+
+## API Endpoints
+### `GET /api/tracks`
+Returns all tracks in the database.
+
+### `POST /api/tracks`
+Upload a new track (multipart/form-data, admin only).
+
+### `DELETE /api/tracks/{id}`
+Delete a track by ID (admin only).
+
+### `GET /api/db-check.php`
+Check database connectivity (returns JSON).
+
+### `GET /db.test.php`
+Standalone DB connection test (returns HTML).
+
+## Configuration
+Edit `api/config.php` with your Hostinger MySQL credentials:
+
+```php
+return [
+   'DB_HOST' => 'srv995.hstgr.io',
+   'DB_NAME' => 'your_db',
+   'DB_USER' => 'your_user',
+   'DB_PASS' => 'your_pass',
+];
+
+## Deployment
+1. Push code to Hostinger Git repo.
+2. Ensure all files are in `/public_html/playback/`.
+3. Set correct credentials in `api/config.php`.
+4. Test `/api/db-check.php` and `/db.test.php` in browser.
+
+## Troubleshooting
+
+- If you see "Access denied" errors, check credentials and user permissions in Hostinger MySQL panel.
+- If `/api/db-check.php` or `/db.test.php` return 404, check file presence and .htaccess rules.
+
+## Security
+
+- Do not expose real credentials in public repos.
+- `.htaccess` handles CORS and API routing only.
+- All backend scripts load credentials from `config.php`.
+
+## License
+MIT
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
