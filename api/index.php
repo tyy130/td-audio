@@ -11,7 +11,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 
 // Load server-only config provided at deploy time (not committed to git)
-$config = require __DIR__ . '/config.php';
+// The deploy script may write `api/config.php` into the project root, or to a safer
+// location outside the webroot. We prefer a remote-config path if set, then a
+// HOME-based path (e.g., /home/<user>/.config/slughouse/api-config.php), and
+// finally fall back to the local `api/config.php` inside the repo.
+
+$remoteConfig = getenv('HOSTINGER_REMOTE_CONFIG') ?: '';
+if (empty($remoteConfig)) {
+    $home = getenv('HOME') ?: '';
+    if (!empty($home)) {
+        $remoteConfig = rtrim($home, '/\\') . '/.config/slughouse/api-config.php';
+    }
+}
+
+if (!empty($remoteConfig) && file_exists($remoteConfig)) {
+    $config = require $remoteConfig;
+} else {
+    $config = require __DIR__ . '/config.php';
+}
 define('DB_HOST', $config['DB_HOST']);
 define('DB_NAME', $config['DB_NAME']);
 define('DB_USER', $config['DB_USER']);

@@ -74,21 +74,24 @@ EOF
 	# Protect the local file
 	chmod 600 "$TMP_CONFIG"
 
-	echo "Uploading config to $USER@$HOST:$REMOTE_PATH/api/config.php (atomic)"
+	# Allow writing the remote config to a safer location outside the web root when
+	# HOSTINGER_REMOTE_CONFIG is set. Otherwise fall back to the standard path.
+	REMOTE_CONFIG_PATH=${HOSTINGER_REMOTE_CONFIG:-$REMOTE_PATH/api/config.php}
+	echo "Uploading config to $USER@$HOST:$REMOTE_CONFIG_PATH (atomic)"
 	# Use rsync to copy the file as a tmp file and move it on the server atomically; backup old config if present.
 	rsync -avz -e "ssh -p $PORT -o StrictHostKeyChecking=no" "$TMP_CONFIG" "$USER@$HOST:$REMOTE_PATH/api/config.php.tmp"
 
 	# If the remote config exists and --force wasn't passed, stop and ask the user to set --force
 	if [ "$FORCE_WRITE" -ne 1 ]; then
-		if ssh -p $PORT -o StrictHostKeyChecking=no "$USER@$HOST" "[ -f '$REMOTE_PATH/api/config.php' ]"; then
-			echo "A config.php already exists on the remote host. Re-run with --force to overwrite (or remove the file manually)." >&2
+		if ssh -p $PORT -o StrictHostKeyChecking=no "$USER@$HOST" "[ -f '$REMOTE_CONFIG_PATH' ]"; then
+			echo "A config file already exists on the remote host ($REMOTE_CONFIG_PATH). Re-run with --force to overwrite (or remove it manually)." >&2
 			shred -u "$TMP_CONFIG" || rm -f "$TMP_CONFIG"
 			exit 1
 		fi
 	fi
 
 	echo "Running remote backup & atomic rename..."
-	ssh -p $PORT -o StrictHostKeyChecking=no "$USER@$HOST" "mkdir -p '$REMOTE_PATH/api' && if [ -f '$REMOTE_PATH/api/config.php' ]; then mv '$REMOTE_PATH/api/config.php' '$REMOTE_PATH/api/config.php.bak.$(date +%s)'; fi && mv '$REMOTE_PATH/api/config.php.tmp' '$REMOTE_PATH/api/config.php' && chmod 600 '$REMOTE_PATH/api/config.php'"
+	ssh -p $PORT -o StrictHostKeyChecking=no "$USER@$HOST" "mkdir -p '$(dirname $REMOTE_CONFIG_PATH)' && if [ -f '$REMOTE_CONFIG_PATH' ]; then mv '$REMOTE_CONFIG_PATH' '$REMOTE_CONFIG_PATH.bak.$(date +%s)'; fi && mv '$REMOTE_CONFIG_PATH.tmp' '$REMOTE_CONFIG_PATH' && chmod 600 '$REMOTE_CONFIG_PATH'"
 
 	echo "Config upload complete; cleaning up local tmp file"
 	shred -u "$TMP_CONFIG" || rm -f "$TMP_CONFIG"

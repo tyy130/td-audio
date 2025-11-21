@@ -54,6 +54,7 @@ jobs:
           HOSTINGER_DB_USER: ${{ secrets.HOSTINGER_DB_USER }}
           HOSTINGER_DB_PASS: ${{ secrets.HOSTINGER_DB_PASS }}
           HOSTINGER_ADMIN_TOKEN: ${{ secrets.HOSTINGER_ADMIN_TOKEN }}
+          HOSTINGER_REMOTE_CONFIG: "/home/${{ secrets.HOSTINGER_USER }}/.config/slughouse/api-config.php"
         run: |
           # Run the deploy script which can optionally write config.php atomically.
           # Skip build because we've already built in CI
@@ -104,8 +105,9 @@ jobs:
           USER: ${{ secrets.HOSTINGER_USER }}
           REMOTE_PATH: ${{ secrets.HOSTINGER_REMOTE_PATH }}
           PORT: ${{ secrets.HOSTINGER_PORT }}
+          HOSTINGER_REMOTE_CONFIG: "/home/${{ secrets.HOSTINGER_USER }}/.config/slughouse/api-config.php"
         run: |
           echo "Checking config.php exists and permissions on remote"
-          ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "set -e; if [ ! -f '${REMOTE_PATH}/api/config.php' ]; then echo 'config.php missing' >&2; exit 1; fi; perms=$(stat -c '%a' '${REMOTE_PATH}/api/config.php'); if [ "$perms" != "600" ]; then echo 'config.php permissions are not 600. Found: ' $perms >&2; exit 1; fi; echo 'config.php present with correct permissions'"
+          ssh -p ${PORT:-22} -o StrictHostKeyChecking=no "${USER}@${HOST}" "set -e; CONFIG='${HOSTINGER_REMOTE_CONFIG:-${REMOTE_PATH}/api/config.php}'; if [ ! -f \"$CONFIG\" ]; then echo 'config missing' >&2; exit 1; fi; perms=$(stat -c '%a' \"$CONFIG\"); if [ \"$perms\" != \"600\" ]; then echo 'config permissions are not 600. Found: ' $perms >&2; exit 1; fi; echo 'config present with correct permissions'"
 
       # config.php is created/written by the deploy script when secrets are provided
