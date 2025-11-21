@@ -13,6 +13,7 @@ dist-ssr
 *.local
 server/uploads
 api/config.php
+php-backend/.env
 
 # Editor directories and files
 .vscode/*

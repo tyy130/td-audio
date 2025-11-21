@@ -1,6 +1,6 @@
 # Root .htaccess for playback
 <IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "https://playback.slughouse.com"
+    Header set Access-Control-Allow-Origin "https://playback.slughouse"
     Header set Access-Control-Allow-Methods "GET, POST, DELETE, OPTIONS"
     Header set Access-Control-Allow-Headers "Content-Type, x-admin-token"
 </IfModule>
@@ -18,10 +18,9 @@ php_value max_input_time 300
 php_value memory_limit 128M
 
 # Hostinger MySQL connection (for PHP backend)
-SetEnv DB_HOST srv995.hstgr.io
-SetEnv DB_NAME u792097907_slughouse
-SetEnv DB_USER u792097907_tdv
-SetEnv DB_PASS ;pC6vaIz
+# Do NOT add secrets here. Store DB credentials in server-only files or environment variables.
+# Example: create `api/config.php` on the server with DB_HOST/DB_NAME/DB_USER/DB_PASS, or use your
+# Hostinger control panel to set environment variables for PHP-FPM.
 
 # Route /api/* to api/index.php
 <IfModule mod_rewrite.c>
