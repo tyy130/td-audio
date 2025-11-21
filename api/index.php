@@ -11,12 +11,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// Loading credentials from environment with fallback
-define('DB_HOST', getenv('DB_HOST') ?: 'srv995.hstgr.io');
-define('DB_NAME', getenv('DB_NAME') ?: 'u792097907_slug_dev');
-define('DB_USER', getenv('DB_USER') ?: 'u792097907_slug_user');
-define('DB_PASS', getenv('DB_PASS') ?: 'QYw?A#bOQnS');
-define('ADMIN_TOKEN', getenv('ADMIN_TOKEN') ?: ''); // Optional
+
+// Load DB credentials from config.php (Hostinger shared hosting)
+$config = require __DIR__ . '/config.php';
+define('DB_HOST', $config['DB_HOST']);
+define('DB_NAME', $config['DB_NAME']);
+define('DB_USER', $config['DB_USER']);
+define('DB_PASS', $config['DB_PASS']);
+define('ADMIN_TOKEN', ''); // Optional: set to match frontend VITE_ADMIN_TOKEN
 
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
 define('MEDIA_BASE_URL', getenv('MEDIA_BASE_URL') ?: 'https://playback.slughouse.com/uploads/');
