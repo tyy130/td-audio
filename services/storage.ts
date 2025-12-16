@@ -62,66 +62,34 @@ export interface TrackMetrics {
 }
 
 export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Track> => {
-  // Use presigned PUT to upload the file directly to object storage, then POST metadata
-  // 1) request presigned url from the server
-  let url: string | null = null;
-  let publicUrl: string | null = null;
-  try {
-    const presignRes = await fetch(buildUrl('/uploads/presign'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(withAdminHeaders() || {}),
-      },
-      body: JSON.stringify({ fileName: metadata.id + '-' + file.name, contentType: file.type }),
-    });
-    if (presignRes.ok) {
-      const json = await presignRes.json();
-      url = json.url;
-      publicUrl = json.publicUrl;
-    } else {
-      // If presign not available, fall back to server multipart upload
-      console.warn('Presign failed, falling back to multipart upload');
-    }
-  } catch (e) {
-    console.warn('Presign request failed, falling back to multipart upload', e);
+  // Upload file to Vercel Blob storage
+  const filename = `${metadata.id}-${file.name}`;
+  
+  const uploadRes = await fetch(buildUrl(`/uploads/blob?filename=${encodeURIComponent(filename)}`), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type,
+      ...(withAdminHeaders() || {}),
+    },
+    body: file,
+  });
+
+  if (!uploadRes.ok) {
+    const error = await uploadRes.json().catch(() => ({ message: 'Upload failed' }));
+    throw new Error(error.message || 'Failed to upload audio file');
   }
 
-  if (url && publicUrl) {
-    // 2) PUT the file to the returned URL
-    const putRes = await fetch(url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!putRes.ok) {
-      throw new Error('Failed to upload file to storage');
-    }
+  const blob = await uploadRes.json();
+  const publicUrl = blob.url;
 
-    // 3) POST metadata to API.tracks with src pointing to publicUrl
-    const response = await fetch(buildUrl('/tracks'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(withAdminHeaders() || {}),
-      },
-      body: JSON.stringify({ ...metadata, src: publicUrl, storagePath: metadata.id + '-' + file.name }),
-    });
-    const handled = await handleResponse(response);
-    return handled.json();
-  }
-
-  // Fallback: server-side multipart upload to /tracks (server will store file on disk)
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('id', metadata.id);
-  formData.append('title', metadata.title);
-  formData.append('artist', metadata.artist);
-  formData.append('coverArt', metadata.coverArt ?? '');
-  formData.append('duration', String(metadata.duration ?? 0));
-  formData.append('addedAt', String(metadata.addedAt));
-  formData.append('sortOrder', String(metadata.sortOrder ?? ''));
-
+  // Save track metadata to database
   const response = await fetch(buildUrl('/tracks'), {
     method: 'POST',
-    body: formData,
-    headers: withAdminHeaders(),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(withAdminHeaders() || {}),
+    },
+    body: JSON.stringify({ ...metadata, src: publicUrl, storagePath: filename }),
   });
 
   const handled = await handleResponse(response);

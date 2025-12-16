@@ -120,7 +120,8 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClos
       setTracks(prev => [...prev, savedTrack]);
     } catch (err) {
       console.error(err);
-      alert('Failed to upload track. Confirm the API URL and Hostinger backend are reachable.');
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      alert(`Failed to upload track: ${message}`);
     }
     
     // Reset form

@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.952.0",
     "@aws-sdk/s3-request-presigner": "^3.952.0",
     "@neondatabase/serverless": "^1.0.2",
+    "@vercel/blob": "^2.0.0",
     "@vercel/edge-config": "^1.4.3",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
