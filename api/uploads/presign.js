@@ -1,7 +1,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-export default async function (req, res) {
+export default async function handler(req, res) {
   try {
     // Simple auth: only allow when x-admin-token matches SERVER ADMIN_TOKEN
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
