@@ -1,13 +1,10 @@
 
 
+// Disabled for Vercel deployments. Legacy Hostinger PHP API preserved in `api/index.php.hostinger`.
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: https://playback.slughouse.com');
-header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, x-admin-token');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
-}
+http_response_code(410);
+echo json_encode(['message' => 'Legacy PHP API disabled on Vercel deployments']);
+exit(0);
 
 
 // Load server-only config provided at deploy time (not committed to git)

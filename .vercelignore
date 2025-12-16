@@ -1,0 +1,6 @@
+# Ignore legacy PHP files and other host-specific scripts for Vercel deployments
+**/*.php
+db.test.php
+deploy.php
+php-backend/**
+playback/**
