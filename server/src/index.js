@@ -58,6 +58,9 @@ const ensureSchema = async () => {
       CONSTRAINT fk_track_metrics_track FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
     );`
   );
+
+  // Simple comments table for quick testing (text only)
+  await query(`CREATE TABLE IF NOT EXISTS comments (id SERIAL PRIMARY KEY, comment TEXT, created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT);`);
 };
 
 ensureSchema().catch((error) => {
@@ -213,6 +216,29 @@ app.post('/tracks', requireAdmin, upload.single('file'), async (req, res) => {
       return res.status(409).json({ message: 'Track with this ID already exists' });
     }
     res.status(500).json({ message: 'Failed to save track' });
+  }
+});
+
+// Comments: quick insert and list endpoints (text only)
+app.get('/comments', async (_req, res) => {
+  try {
+    const rows = await query('SELECT id, comment, created_at FROM comments ORDER BY id DESC LIMIT 100');
+    res.json(rows);
+  } catch (err) {
+    console.error('Failed to fetch comments', err);
+    res.status(500).json({ message: 'Failed to fetch comments' });
+  }
+});
+
+app.post('/comments', async (req, res) => {
+  try {
+    const { comment } = req.body || {};
+    if (!comment || typeof comment !== 'string') return res.status(400).json({ message: 'comment required' });
+    await query('INSERT INTO comments (comment, created_at) VALUES ($1, $2)', [comment, Date.now()]);
+    res.status(201).json({ message: 'ok' });
+  } catch (err) {
+    console.error('Failed to insert comment', err);
+    res.status(500).json({ message: 'Failed to insert comment' });
   }
 });
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Track, AppView, RepeatMode, PersistentSettings } from './types';
 import { getAllTracks, TrackMetrics } from './services/storage';
 import Player from './components/Player';
+import Comments from './components/Comments';
 
 // Lazy load Admin component - only loads when user clicks settings
 const Admin = lazy(() => import('./components/Admin'));
@@ -173,6 +174,9 @@ function App() {
             onVolumeChange={setVolume}
             onTrackMetrics={handleTrackMetricsUpdate}
           />
+          <div className="px-6 py-6">
+            <Comments />
+          </div>
         ) : (
           <Suspense fallback={
             <div className="flex items-center justify-center min-h-screen">
