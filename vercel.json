@@ -5,10 +5,6 @@
       "runtime": "nodejs18.x",
       "maxDuration": 10
     },
-    "api/**/*.php": {
-      "runtime": "now-php@1.0.0",
-      "maxDuration": 10
-    }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" }
