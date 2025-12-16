@@ -5,24 +5,15 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { createPool } from 'mysql2/promise';
+import { createClient } from '@neondatabase/serverless';
 import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const requiredEnvVars = [
-  'MYSQL_HOST',
-  'MYSQL_DATABASE',
-  'MYSQL_USER',
-  'MYSQL_PASSWORD',
-];
-
-requiredEnvVars.forEach((key) => {
-  if (!process.env[key]) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-});
+if (!process.env.DATABASE_URL) {
+  throw new Error('Missing required environment variable: DATABASE_URL');
+}
 
 const mediaRoot = process.env.MEDIA_ROOT || path.resolve(__dirname, '../uploads');
 const mediaBaseUrl = process.env.MEDIA_BASE_URL || '';
@@ -30,24 +21,34 @@ const maxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES || 25 * 1024 * 1024);
 
 fs.mkdirSync(mediaRoot, { recursive: true });
 
-const pool = createPool({
-  host: process.env.MYSQL_HOST,
-  port: Number(process.env.MYSQL_PORT) || 3306,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
-  waitForConnections: true,
-  connectionLimit: Number(process.env.MYSQL_CONN_LIMIT) || 10,
-});
+const db = createClient({ connectionString: process.env.DATABASE_URL });
+
+async function query(sql, params = []) {
+  const result = await db.query(sql, params);
+  return result.rows || [];
+}
 
 const app = express();
 
 const ensureSchema = async () => {
-  await pool.query(
-    `ALTER TABLE tracks ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0`
+  // Create tracks table if missing (Postgres syntax)
+  await query(
+    `CREATE TABLE IF NOT EXISTS tracks (
+      id VARCHAR(36) PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      artist VARCHAR(255) NOT NULL,
+      audio_url TEXT NOT NULL,
+      audio_path TEXT DEFAULT NULL,
+      cover_art TEXT DEFAULT NULL,
+      duration INT DEFAULT 0,
+      added_at BIGINT NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0
+    );`
   );
 
-  await pool.query(
+  await query(`CREATE INDEX IF NOT EXISTS idx_tracks_added_at ON tracks(added_at);`);
+
+  await query(
     `CREATE TABLE IF NOT EXISTS track_metrics (
       track_id VARCHAR(36) PRIMARY KEY,
       play_count INT NOT NULL DEFAULT 0,
@@ -55,7 +56,7 @@ const ensureSchema = async () => {
       vibe_count INT NOT NULL DEFAULT 0,
       last_played_at BIGINT NULL,
       CONSTRAINT fk_track_metrics_track FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+    );`
   );
 };
 
@@ -146,7 +147,7 @@ app.get('/health', (_req, res) => {
 
 app.get('/tracks', async (_req, res) => {
   try {
-    const [rows] = await pool.query(
+    const rows = await query(
       `SELECT t.*, m.play_count, m.vibe_total, m.vibe_count, m.last_played_at
        FROM tracks t
        LEFT JOIN track_metrics m ON m.track_id = t.id
@@ -173,14 +174,12 @@ app.post('/tracks', requireAdmin, upload.single('file'), async (req, res) => {
     const relativePath = path.relative(mediaRoot, req.file.path).replace(/\\/g, '/');
     const audioUrl = buildPublicUrl(relativePath);
 
-    const [[orderRow]] = await pool.query(
-      'SELECT COALESCE(MAX(sort_order), 0) as max_order FROM tracks'
-    );
-    const resolvedSort = Number(sortOrder) || Number(orderRow?.max_order || 0) + 1;
+    const orderRows = await query('SELECT COALESCE(MAX(sort_order), 0) as max_order FROM tracks');
+    const resolvedSort = Number(sortOrder) || Number(orderRows?.[0]?.max_order || 0) + 1;
 
-    await pool.execute(
+    await query(
       `INSERT INTO tracks (id, title, artist, audio_url, audio_path, cover_art, duration, added_at, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [
         id,
         title,
@@ -223,17 +222,13 @@ app.delete('/tracks/:id', requireAdmin, async (req, res) => {
     return res.status(400).json({ message: 'Missing track id' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-    const [rows] = await connection.query('SELECT audio_path FROM tracks WHERE id = ?', [id]);
+    const rows = await query('SELECT audio_path FROM tracks WHERE id = $1', [id]);
     if (!rows.length) {
-      await connection.rollback();
       return res.status(404).json({ message: 'Track not found' });
     }
 
-    await connection.query('DELETE FROM tracks WHERE id = ?', [id]);
-    await connection.commit();
+    await query('DELETE FROM tracks WHERE id = $1', [id]);
 
     const relativePath = rows[0].audio_path;
     if (relativePath) {
@@ -290,29 +285,25 @@ app.patch('/tracks/:id', requireAdmin, async (req, res) => {
   values.push(id);
 
   try {
-    const [result] = await pool.execute(
-      `UPDATE tracks SET ${updates.join(', ')} WHERE id = ?`,
-      values
-    );
-
-    if (result.affectedRows === 0) {
+    const setClause = updates.join(', ');
+    const updated = await query(`UPDATE tracks SET ${setClause} WHERE id = $${values.length} RETURNING *`, values);
+    if (!updated.length) {
       return res.status(404).json({ message: 'Track not found' });
     }
-
-    const [rows] = await pool.query(
+    const [row] = await query(
       `SELECT t.*, m.play_count, m.vibe_total, m.vibe_count, m.last_played_at
        FROM tracks t
        LEFT JOIN track_metrics m ON m.track_id = t.id
-       WHERE t.id = ?
+       WHERE t.id = $1
        LIMIT 1`,
       [id]
     );
 
-    if (!rows.length) {
+    if (!row) {
       return res.status(404).json({ message: 'Track not found' });
     }
 
-    res.json(mapRowToTrack(rows[0]));
+    res.json(mapRowToTrack(row));
   } catch (error) {
     console.error('Failed to update track', error);
     res.status(500).json({ message: 'Failed to update track' });
@@ -326,30 +317,27 @@ app.post('/tracks/reorder', requireAdmin, async (req, res) => {
     return res.status(400).json({ message: 'Order must be a non-empty array of track ids' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    await query('BEGIN');
     for (let i = 0; i < order.length; i += 1) {
-      await connection.query('UPDATE tracks SET sort_order = ? WHERE id = ?', [i, order[i]]);
+      await query('UPDATE tracks SET sort_order = $1 WHERE id = $2', [i, order[i]]);
     }
-    await connection.commit();
+    await query('COMMIT');
     res.json({ message: 'Order updated' });
   } catch (error) {
     console.error('Failed to reorder tracks', error);
     try {
-      await connection.rollback();
+      await query('ROLLBACK');
     } catch (rollbackError) {
       console.warn('Rollback failed after reorder', rollbackError.message);
     }
     res.status(500).json({ message: 'Failed to reorder tracks' });
-  } finally {
-    connection.release();
   }
 });
 
 const fetchMetrics = async (id) => {
-  const [rows] = await pool.query(
-    `SELECT play_count, vibe_total, vibe_count, last_played_at FROM track_metrics WHERE track_id = ? LIMIT 1`,
+  const rows = await query(
+    `SELECT play_count, vibe_total, vibe_count, last_played_at FROM track_metrics WHERE track_id = $1 LIMIT 1`,
     [id]
   );
   const metrics = rows[0] || {};
@@ -374,10 +362,10 @@ app.post('/tracks/:id/play', async (req, res) => {
   const playedAt = Date.now();
 
   try {
-    await pool.query(
+    await query(
       `INSERT INTO track_metrics (track_id, play_count, last_played_at)
-       VALUES (?, 1, ?)
-       ON DUPLICATE KEY UPDATE play_count = play_count + 1, last_played_at = VALUES(last_played_at)`,
+       VALUES ($1, 1, $2)
+       ON CONFLICT (track_id) DO UPDATE SET play_count = track_metrics.play_count + 1, last_played_at = EXCLUDED.last_played_at`,
       [id, playedAt]
     );
 
@@ -400,10 +388,10 @@ app.post('/tracks/:id/vibe', async (req, res) => {
   const normalized = Math.min(Math.max(Number(score) || 1, 1), 5);
 
   try {
-    await pool.query(
+    await query(
       `INSERT INTO track_metrics (track_id, vibe_total, vibe_count)
-       VALUES (?, ?, 1)
-       ON DUPLICATE KEY UPDATE vibe_total = vibe_total + VALUES(vibe_total), vibe_count = vibe_count + 1`,
+       VALUES ($1, $2, 1)
+       ON CONFLICT (track_id) DO UPDATE SET vibe_total = track_metrics.vibe_total + EXCLUDED.vibe_total, vibe_count = track_metrics.vibe_count + 1`,
       [id, normalized]
     );
 
