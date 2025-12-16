@@ -113,6 +113,25 @@ VITE_API_BASE_URL=http://localhost:4000
 VITE_ADMIN_TOKEN=  # leave blank for dev
 ```
 
+Storage & upload 💾
+
+This project supports two upload flows:
+
+- Presigned, direct-to-bucket (recommended): the frontend requests a presigned PUT URL from `/api/uploads/presign` (admin-only) and uploads the file directly to your object storage (S3 / R2 / Backblaze). After successful upload the client POSTs metadata to `/api/tracks` with `src` set to the public file URL.
+
+- Server-side multipart upload (fallback): If presign is not configured, the frontend will upload the file to `/tracks` using multipart form data; server stores files on disk at `MEDIA_ROOT`.
+
+Environment variables for presigned uploads:
+
+- `S3_BUCKET` — bucket name
+- `S3_REGION` — region (optional if `S3_ENDPOINT` is provided)
+- `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` — credentials
+- `S3_ENDPOINT` — optional custom S3-compatible endpoint (e.g., R2 or Backblaze)
+- `STORAGE_PUBLIC_BASE_URL` — optional base URL for public file URLs (e.g., https://cdn.example.com or https://bucket.s3.amazonaws.com)
+
+Add these to your Vercel Production environment variables before deploying to enable presigned uploads.
+
+
 Backend (`server/.env`):
 
 ```bash

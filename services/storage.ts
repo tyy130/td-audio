@@ -62,6 +62,52 @@ export interface TrackMetrics {
 }
 
 export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Track> => {
+  // Use presigned PUT to upload the file directly to object storage, then POST metadata
+  // 1) request presigned url from the server
+  let url: string | null = null;
+  let publicUrl: string | null = null;
+  try {
+    const presignRes = await fetch(buildUrl('/uploads/presign'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(withAdminHeaders() || {}),
+      },
+      body: JSON.stringify({ fileName: metadata.id + '-' + file.name, contentType: file.type }),
+    });
+    if (presignRes.ok) {
+      const json = await presignRes.json();
+      url = json.url;
+      publicUrl = json.publicUrl;
+    } else {
+      // If presign not available, fall back to server multipart upload
+      console.warn('Presign failed, falling back to multipart upload');
+    }
+  } catch (e) {
+    console.warn('Presign request failed, falling back to multipart upload', e);
+  }
+
+  if (url && publicUrl) {
+    // 2) PUT the file to the returned URL
+    const putRes = await fetch(url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!putRes.ok) {
+      throw new Error('Failed to upload file to storage');
+    }
+
+    // 3) POST metadata to API.tracks with src pointing to publicUrl
+    const response = await fetch(buildUrl('/tracks'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(withAdminHeaders() || {}),
+      },
+      body: JSON.stringify({ ...metadata, src: publicUrl, storagePath: metadata.id + '-' + file.name }),
+    });
+    const handled = await handleResponse(response);
+    return handled.json();
+  }
+
+  // Fallback: server-side multipart upload to /tracks (server will store file on disk)
   const formData = new FormData();
   formData.append('file', file);
   formData.append('id', metadata.id);
