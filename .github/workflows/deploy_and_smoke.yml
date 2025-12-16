@@ -1,0 +1,57 @@
+name: Deploy to Vercel and Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Deploy to Vercel (prod)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          # Deploy to production using Vercel CLI. Repo must be linked to a Vercel project.
+          vercel --prod --confirm --token "$VERCEL_TOKEN"
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for site to warm up
+        run: sleep 15
+
+      - name: Health check
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          echo "Checking $SITE_URL/api/health"
+          HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$SITE_URL/api/health") || true
+          echo "Health HTTP code: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Health check failed (HTTP $HTTP_CODE)"; exit 1
+          fi
+
+      - name: Create a smoke comment
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          echo 'Posting smoke comment'
+          RESP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$SITE_URL/api/comments" -H "Content-Type: application/json" -d '{"comment":"smoke test"}') || true
+          echo "POST /api/comments returned $RESP_CODE"
+          if [ "$RESP_CODE" != "201" ]; then
+            echo "Create comment failed (HTTP $RESP_CODE)"; exit 1
+          fi

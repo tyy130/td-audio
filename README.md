@@ -131,6 +131,20 @@ Environment variables for presigned uploads:
 
 Add these to your Vercel Production environment variables before deploying to enable presigned uploads.
 
+Automated deploy & smoke test
+
+This repository includes a GitHub Actions workflow (`.github/workflows/deploy_and_smoke.yml`) that:
+
+- Deploys `main` to Vercel using the Vercel CLI
+- Runs smoke tests: hits `/api/health` and posts a test comment to `/api/comments`
+
+Required GitHub secrets for the workflow:
+
+- `VERCEL_TOKEN` — Personal Vercel token with deploy scope (create in Vercel dashboard)
+- `SITE_URL` — Production site URL (e.g., https://your-project.vercel.app)
+
+To trigger deploy immediately after adding secrets, go to Actions → Deploy to Vercel and click "Run workflow" or push to `main`.
+
 
 Backend (`server/.env`):
 
