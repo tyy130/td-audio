@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Track } from '../types';
 import { Reorder, useDragControls } from 'framer-motion';
 import { Trash2, GripVertical, Music, Sparkles, Upload, Lock, ArrowRight } from 'lucide-react';
-import { saveTrack, deleteTrack } from '../services/storage';
+import { deleteTrack, reorderTracks, saveTrack, updateTrack } from '../services/storage';
 import { DEFAULT_COVER } from '../constants';
 
 interface TrackItemProps {
@@ -33,6 +33,10 @@ const TrackItem: React.FC<TrackItemProps> = ({ track, onDelete }) => {
         <div className="min-w-0">
           <h4 className="font-medium text-neutral-200 truncate">{track.title}</h4>
           <p className="text-sm text-neutral-500 truncate">{track.artist}</p>
+          <p className="text-[11px] text-neutral-600 mt-1 flex items-center gap-3">
+            <span className="inline-flex items-center gap-1">▶ {track.playCount ?? 0}</span>
+            <span className="inline-flex items-center gap-1">✦ {(track.vibeAverage ?? 0).toFixed(1)}</span>
+          </p>
         </div>
       </div>
       
@@ -49,17 +53,25 @@ const TrackItem: React.FC<TrackItemProps> = ({ track, onDelete }) => {
 interface AdminProps {
   tracks: Track[];
   setTracks: React.Dispatch<React.SetStateAction<Track[]>>;
+  onTrackUpdated: (track: Track) => void;
   onClose: () => void;
 }
 
-const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
+const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClose }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [newTrackTitle, setNewTrackTitle] = useState('');
   const [newTrackArtist, setNewTrackArtist] = useState('');
+  const [editTrackId, setEditTrackId] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editArtist, setEditArtist] = useState('');
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const handleLogin = (e?: React.FormEvent) => {
       e?.preventDefault();
       // Simple client-side check for demo
@@ -125,9 +137,61 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
         await deleteTrack(track);
         setTracks(prev => prev.filter(t => t.id !== id));
       } catch (err) {
-        console.error(err);
-        alert('Unable to delete track from the server.');
-      }
+      console.error(err);
+      alert('Unable to delete track from the server.');
+    }
+  };
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const id = window.setTimeout(() => setToastMessage(null), 2400);
+    return () => window.clearTimeout(id);
+  }, [toastMessage]);
+
+  const handleSelectEdit = (id: string) => {
+    setEditTrackId(id);
+    const target = tracks.find((t) => t.id === id);
+    setEditTitle(target?.title || '');
+    setEditArtist(target?.artist || '');
+  };
+
+  const handleUpdateTrack = async () => {
+    if (!editTrackId) {
+      alert('Select a track to edit.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const updated = await updateTrack(editTrackId, {
+        title: editTitle,
+        artist: editArtist,
+      });
+
+      setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      onTrackUpdated(updated);
+      setToastMessage('Track updated');
+    } catch (err) {
+      console.error(err);
+      alert('Unable to update track.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSaveOrder = async () => {
+    if (!orderDirty) return;
+    setIsSavingOrder(true);
+    try {
+      await reorderTracks(tracks.map((t) => t.id));
+      setOrderDirty(false);
+      setToastMessage('Queue order saved');
+    } catch (err) {
+      console.error(err);
+      alert('Unable to save order.');
+    } finally {
+      setIsSavingOrder(false);
+    }
   };
 
     if (!isAuthenticated) {
@@ -229,10 +293,82 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
         </p>
       </div>
 
+      {/* Edit Section */}
+      <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-semibold text-white mb-1">Edit Metadata</h3>
+            <p className="text-neutral-500 text-sm">Update titles or artists without re-uploading audio.</p>
+          </div>
+          <button
+            onClick={handleSaveOrder}
+            disabled={!orderDirty || isSavingOrder}
+            className="px-4 py-2 rounded-lg border border-indigo-500 text-indigo-100 bg-indigo-600/20 hover:bg-indigo-600/30 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isSavingOrder ? 'Saving order...' : orderDirty ? 'Save queue order' : 'Order saved'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Track</label>
+            <select
+              value={editTrackId}
+              onChange={(e) => handleSelectEdit(e.target.value)}
+              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+            >
+              <option value="">Select track</option>
+              {tracks.map((track) => (
+                <option key={track.id} value={track.id}>
+                  {track.title} · {track.artist}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Title</label>
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+              placeholder="Song Title"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Artist</label>
+            <input
+              type="text"
+              value={editArtist}
+              onChange={(e) => setEditArtist(e.target.value)}
+              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+              placeholder="Artist"
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <button
+            onClick={handleUpdateTrack}
+            disabled={isUpdating}
+            className="px-5 py-3 bg-white text-black rounded-lg font-semibold hover:bg-neutral-100 transition-colors disabled:opacity-50"
+          >
+            {isUpdating ? 'Saving...' : 'Update Track'}
+          </button>
+        </div>
+      </div>
+
       {/* Track List */}
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-neutral-300 mb-4">Current Tracks</h3>
-        <Reorder.Group axis="y" values={tracks} onReorder={setTracks} className="space-y-2">
+        <Reorder.Group
+          axis="y"
+          values={tracks}
+          onReorder={(next) => {
+            setTracks(next);
+            setOrderDirty(true);
+          }}
+          className="space-y-2"
+        >
           {tracks.map((track) => (
             <TrackItem key={track.id} track={track} onDelete={() => handleDelete(track.id)} />
           ))}
@@ -243,6 +379,11 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onClose }) => {
             </div>
         )}
       </div>
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 text-white text-sm px-4 py-2 rounded-full border border-white/20 backdrop-blur-md shadow-lg">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 };

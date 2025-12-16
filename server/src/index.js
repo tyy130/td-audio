@@ -42,6 +42,27 @@ const pool = createPool({
 
 const app = express();
 
+const ensureSchema = async () => {
+  await pool.query(
+    `ALTER TABLE tracks ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0`
+  );
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS track_metrics (
+      track_id VARCHAR(36) PRIMARY KEY,
+      play_count INT NOT NULL DEFAULT 0,
+      vibe_total INT NOT NULL DEFAULT 0,
+      vibe_count INT NOT NULL DEFAULT 0,
+      last_played_at BIGINT NULL,
+      CONSTRAINT fk_track_metrics_track FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+  );
+};
+
+ensureSchema().catch((error) => {
+  console.error('Failed to ensure schema is up to date', error);
+});
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
 app.use(cors({
   origin: allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : true,
@@ -88,6 +109,15 @@ const mapRowToTrack = (row) => ({
   coverArt: row.cover_art || undefined,
   duration: row.duration || 0,
   addedAt: Number(row.added_at) || Date.now(),
+  sortOrder: typeof row.sort_order === 'number' ? row.sort_order : 0,
+  playCount: Number(row.play_count) || 0,
+  vibeTotal: Number(row.vibe_total) || 0,
+  vibeCount: Number(row.vibe_count) || 0,
+  vibeAverage:
+    Number(row.vibe_count) > 0
+      ? Math.round((Number(row.vibe_total) / Number(row.vibe_count)) * 10) / 10
+      : 0,
+  lastPlayedAt: row.last_played_at ? Number(row.last_played_at) : undefined,
 });
 
 const buildPublicUrl = (relativePath) => {
@@ -116,7 +146,12 @@ app.get('/health', (_req, res) => {
 
 app.get('/tracks', async (_req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM tracks ORDER BY added_at ASC');
+    const [rows] = await pool.query(
+      `SELECT t.*, m.play_count, m.vibe_total, m.vibe_count, m.last_played_at
+       FROM tracks t
+       LEFT JOIN track_metrics m ON m.track_id = t.id
+       ORDER BY t.sort_order ASC, t.added_at ASC`
+    );
     res.json(rows.map(mapRowToTrack));
   } catch (error) {
     console.error('Failed to fetch tracks', error);
@@ -126,7 +161,7 @@ app.get('/tracks', async (_req, res) => {
 
 app.post('/tracks', requireAdmin, upload.single('file'), async (req, res) => {
   try {
-    const { id, title, artist, coverArt, duration, addedAt } = req.body;
+    const { id, title, artist, coverArt, duration, addedAt, sortOrder } = req.body;
     if (!id || !title || !artist) {
       await deleteIfExists(req.file?.path);
       return res.status(400).json({ message: 'Missing id, title, or artist' });
@@ -138,9 +173,14 @@ app.post('/tracks', requireAdmin, upload.single('file'), async (req, res) => {
     const relativePath = path.relative(mediaRoot, req.file.path).replace(/\\/g, '/');
     const audioUrl = buildPublicUrl(relativePath);
 
+    const [[orderRow]] = await pool.query(
+      'SELECT COALESCE(MAX(sort_order), 0) as max_order FROM tracks'
+    );
+    const resolvedSort = Number(sortOrder) || Number(orderRow?.max_order || 0) + 1;
+
     await pool.execute(
-      `INSERT INTO tracks (id, title, artist, audio_url, audio_path, cover_art, duration, added_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tracks (id, title, artist, audio_url, audio_path, cover_art, duration, added_at, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         title,
@@ -150,6 +190,7 @@ app.post('/tracks', requireAdmin, upload.single('file'), async (req, res) => {
         coverArt || null,
         Number(duration) || 0,
         Number(addedAt) || Date.now(),
+        resolvedSort,
       ]
     );
 
@@ -162,6 +203,7 @@ app.post('/tracks', requireAdmin, upload.single('file'), async (req, res) => {
       coverArt: coverArt || undefined,
       duration: Number(duration) || 0,
       addedAt: Number(addedAt) || Date.now(),
+      sortOrder: resolvedSort,
     });
   } catch (error) {
     console.error('Failed to save track', error);
@@ -210,6 +252,166 @@ app.delete('/tracks/:id', requireAdmin, async (req, res) => {
     res.status(500).json({ message: 'Failed to delete track' });
   } finally {
     connection.release();
+  }
+});
+
+app.patch('/tracks/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { title, artist, coverArt, sortOrder } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ message: 'Missing track id' });
+  }
+
+  const updates = [];
+  const values = [];
+
+  if (typeof title === 'string') {
+    updates.push('title = ?');
+    values.push(title);
+  }
+  if (typeof artist === 'string') {
+    updates.push('artist = ?');
+    values.push(artist);
+  }
+  if (typeof coverArt === 'string') {
+    updates.push('cover_art = ?');
+    values.push(coverArt);
+  }
+  if (typeof sortOrder === 'number') {
+    updates.push('sort_order = ?');
+    values.push(sortOrder);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ message: 'No updates provided' });
+  }
+
+  values.push(id);
+
+  try {
+    const [result] = await pool.execute(
+      `UPDATE tracks SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Track not found' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT t.*, m.play_count, m.vibe_total, m.vibe_count, m.last_played_at
+       FROM tracks t
+       LEFT JOIN track_metrics m ON m.track_id = t.id
+       WHERE t.id = ?
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Track not found' });
+    }
+
+    res.json(mapRowToTrack(rows[0]));
+  } catch (error) {
+    console.error('Failed to update track', error);
+    res.status(500).json({ message: 'Failed to update track' });
+  }
+});
+
+app.post('/tracks/reorder', requireAdmin, async (req, res) => {
+  const { order } = req.body;
+
+  if (!Array.isArray(order) || order.length === 0) {
+    return res.status(400).json({ message: 'Order must be a non-empty array of track ids' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (let i = 0; i < order.length; i += 1) {
+      await connection.query('UPDATE tracks SET sort_order = ? WHERE id = ?', [i, order[i]]);
+    }
+    await connection.commit();
+    res.json({ message: 'Order updated' });
+  } catch (error) {
+    console.error('Failed to reorder tracks', error);
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.warn('Rollback failed after reorder', rollbackError.message);
+    }
+    res.status(500).json({ message: 'Failed to reorder tracks' });
+  } finally {
+    connection.release();
+  }
+});
+
+const fetchMetrics = async (id) => {
+  const [rows] = await pool.query(
+    `SELECT play_count, vibe_total, vibe_count, last_played_at FROM track_metrics WHERE track_id = ? LIMIT 1`,
+    [id]
+  );
+  const metrics = rows[0] || {};
+  const vibeAverage = metrics.vibe_count
+    ? Math.round((Number(metrics.vibe_total) / Number(metrics.vibe_count)) * 10) / 10
+    : 0;
+  return {
+    playCount: Number(metrics.play_count) || 0,
+    vibeTotal: Number(metrics.vibe_total) || 0,
+    vibeCount: Number(metrics.vibe_count) || 0,
+    vibeAverage,
+    lastPlayedAt: metrics.last_played_at ? Number(metrics.last_played_at) : undefined,
+  };
+};
+
+app.post('/tracks/:id/play', async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    return res.status(400).json({ message: 'Missing track id' });
+  }
+
+  const playedAt = Date.now();
+
+  try {
+    await pool.query(
+      `INSERT INTO track_metrics (track_id, play_count, last_played_at)
+       VALUES (?, 1, ?)
+       ON DUPLICATE KEY UPDATE play_count = play_count + 1, last_played_at = VALUES(last_played_at)`,
+      [id, playedAt]
+    );
+
+    const metrics = await fetchMetrics(id);
+    res.json(metrics);
+  } catch (error) {
+    console.error('Failed to record play', error);
+    res.status(500).json({ message: 'Failed to record play' });
+  }
+});
+
+app.post('/tracks/:id/vibe', async (req, res) => {
+  const { id } = req.params;
+  const { score } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ message: 'Missing track id' });
+  }
+
+  const normalized = Math.min(Math.max(Number(score) || 1, 1), 5);
+
+  try {
+    await pool.query(
+      `INSERT INTO track_metrics (track_id, vibe_total, vibe_count)
+       VALUES (?, ?, 1)
+       ON DUPLICATE KEY UPDATE vibe_total = vibe_total + VALUES(vibe_total), vibe_count = vibe_count + 1`,
+      [id, normalized]
+    );
+
+    const metrics = await fetchMetrics(id);
+    res.json(metrics);
+  } catch (error) {
+    console.error('Failed to record vibe', error);
+    res.status(500).json({ message: 'Failed to record vibe' });
   }
 });
 

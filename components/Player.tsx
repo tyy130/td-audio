@@ -5,6 +5,7 @@ import Visualizer from './Visualizer';
 import { useAudio } from '../hooks/useAudio';
 import { clsx } from 'clsx';
 import { DEFAULT_COVER } from '../constants';
+import { recordPlayback, sendVibe, TrackMetrics } from '../services/storage';
 
 interface PlayerProps {
   currentTrack: Track | null;
@@ -20,6 +21,7 @@ interface PlayerProps {
   onRepeatToggle: () => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
+  onTrackMetrics: (id: string, metrics: TrackMetrics) => void;
 }
 
 const Player: React.FC<PlayerProps> = ({ 
@@ -35,7 +37,8 @@ const Player: React.FC<PlayerProps> = ({
   onShuffleToggle,
   onRepeatToggle,
   volume,
-  onVolumeChange
+  onVolumeChange,
+  onTrackMetrics
 }) => {
   const { isPlaying, togglePlay, duration, currentTime, seek, changeVolume } = useAudio(
     currentTrack?.src || '',
@@ -44,6 +47,9 @@ const Player: React.FC<PlayerProps> = ({
     volume
   );
   const [toast, setToast] = useState<string | null>(null);
+  const [resonance, setResonance] = useState(3);
+  const [isSubmittingVibe, setIsSubmittingVibe] = useState(false);
+  const [playRecordedFor, setPlayRecordedFor] = useState<string | null>(null);
 
   const handleVolumeChange = (value: number) => {
     changeVolume(value);
@@ -58,7 +64,7 @@ const Player: React.FC<PlayerProps> = ({
 
   const shareUrl = typeof window !== 'undefined' && window.location.origin.includes('localhost')
     ? window.location.origin
-    : 'https://tdaudio-app.surge.sh';
+    : 'https://media.slughouse.com';
 
   const copyLink = async () => {
     try {
@@ -105,6 +111,42 @@ const Player: React.FC<PlayerProps> = ({
     const min = Math.floor(time / 60);
     const sec = Math.floor(time % 60);
     return `${min}:${sec < 10 ? '0' + sec : sec}`;
+  };
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    setResonance(Math.max(1, Math.min(currentTrack.vibeAverage ? Math.round(currentTrack.vibeAverage) : 3, 5)));
+    setPlayRecordedFor(null);
+  }, [currentTrack?.id, currentTrack?.vibeAverage]);
+
+  useEffect(() => {
+    const capturePlay = async () => {
+      if (!currentTrack || !isPlaying || playRecordedFor === currentTrack.id) return;
+      try {
+        const metrics = await recordPlayback(currentTrack.id);
+        onTrackMetrics(currentTrack.id, metrics);
+        setPlayRecordedFor(currentTrack.id);
+      } catch (err) {
+        console.error('Failed to record play', err);
+      }
+    };
+    capturePlay();
+  }, [currentTrack, isPlaying, onTrackMetrics, playRecordedFor]);
+
+  const submitVibe = async (value: number) => {
+    if (!currentTrack) return;
+    setIsSubmittingVibe(true);
+    try {
+      const metrics = await sendVibe(currentTrack.id, value);
+      onTrackMetrics(currentTrack.id, metrics);
+      setResonance(value);
+      setToast('Resonance saved');
+    } catch (err) {
+      console.error('Failed to submit resonance', err);
+      setToast('Unable to send vibe right now');
+    } finally {
+      setIsSubmittingVibe(false);
+    }
   };
 
   return (
@@ -154,6 +196,33 @@ const Player: React.FC<PlayerProps> = ({
                </div>
 
                <Visualizer isPlaying={isPlaying} />
+
+               <div className="mt-6 space-y-3">
+                  <div className="flex items-center justify-center gap-3 text-xs uppercase tracking-[0.25em] text-neutral-500">
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+                      Plays <span className="text-white font-semibold tracking-wide">{currentTrack.playCount ?? 0}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-100">
+                      Resonance <span className="text-white font-semibold tracking-wide">{(currentTrack.vibeAverage ?? 0).toFixed(1)}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => submitVibe(level)}
+                        disabled={isSubmittingVibe}
+                        className={clsx(
+                          'h-10 w-10 rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
+                          resonance >= level ? 'bg-indigo-500/70 border-indigo-400 text-white' : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white hover:border-indigo-400/50'
+                        )}
+                        aria-label={`Set resonance to ${level}/5`}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+               </div>
             </div>
           ) : (
             <div className="text-neutral-500 text-center">
@@ -324,13 +393,13 @@ const Player: React.FC<PlayerProps> = ({
         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-neutral-600">
             <span className="hidden md:inline">{isShuffle ? 'Shuffle on' : 'Shuffle off'} · Repeat {repeatMode}</span>
             <div className="ml-auto flex items-center gap-3">
-            <a 
-              href="https://playback.slughouse" 
-                target="_blank" 
+            <a
+              href="https://media.slughouse.com"
+                target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-neutral-300 hover:text-white text-xs font-semibold"
               >
-              playback.slughouse <ExternalLink size={14} />
+              media.slughouse.com <ExternalLink size={14} />
               </a>
               <span className="text-[0.6rem] tracking-[0.45em] text-white/40">keep it close</span>
             </div>

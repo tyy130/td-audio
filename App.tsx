@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Track, AppView, RepeatMode, PersistentSettings } from './types';
-import { getAllTracks } from './services/storage';
+import { getAllTracks, TrackMetrics } from './services/storage';
 import Player from './components/Player';
 
 // Lazy load Admin component - only loads when user clicks settings
@@ -114,6 +114,41 @@ function App() {
     });
   };
 
+  const handleTrackMetricsUpdate = (id: string, metrics: TrackMetrics) => {
+    setTracks((prev) =>
+      prev.map((track) =>
+        track.id === id
+          ? {
+              ...track,
+              playCount: metrics.playCount,
+              vibeTotal: metrics.vibeTotal,
+              vibeCount: metrics.vibeCount,
+              vibeAverage: metrics.vibeAverage,
+              lastPlayedAt: metrics.lastPlayedAt,
+            }
+          : track
+      )
+    );
+
+    setCurrentTrack((prev) =>
+      prev && prev.id === id
+        ? {
+            ...prev,
+            playCount: metrics.playCount,
+            vibeTotal: metrics.vibeTotal,
+            vibeCount: metrics.vibeCount,
+            vibeAverage: metrics.vibeAverage,
+            lastPlayedAt: metrics.lastPlayedAt,
+          }
+        : prev
+    );
+  };
+
+  const handleTrackReplace = (next: Track) => {
+    setTracks((prev) => prev.map((track) => (track.id === next.id ? next : track)));
+    setCurrentTrack((prev) => (prev && prev.id === next.id ? next : prev));
+  };
+
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-[#04010b] via-[#070112] to-black text-neutral-200 selection:bg-indigo-500 selection:text-white overflow-hidden">
       <div className="pointer-events-none absolute inset-0">
@@ -136,6 +171,7 @@ function App() {
             onRepeatToggle={cycleRepeatMode}
             volume={volume}
             onVolumeChange={setVolume}
+            onTrackMetrics={handleTrackMetricsUpdate}
           />
         ) : (
           <Suspense fallback={
@@ -146,9 +182,10 @@ function App() {
               </div>
             </div>
           }>
-            <Admin 
-              tracks={tracks} 
-              setTracks={setTracks} 
+            <Admin
+              tracks={tracks}
+              setTracks={setTracks}
+              onTrackUpdated={handleTrackReplace}
               onClose={() => setView(AppView.PLAYER)}
             />
           </Suspense>

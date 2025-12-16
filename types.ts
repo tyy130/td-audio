@@ -7,6 +7,12 @@ export interface Track {
   coverArt?: string;
   addedAt: number;
   storagePath?: string;
+  sortOrder?: number;
+  playCount?: number;
+  vibeTotal?: number;
+  vibeCount?: number;
+  vibeAverage?: number;
+  lastPlayedAt?: number;
 }
 
 export enum AppView {
