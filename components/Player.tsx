@@ -40,7 +40,7 @@ const Player: React.FC<PlayerProps> = ({
   onVolumeChange,
   onTrackMetrics
 }) => {
-  const { isPlaying, togglePlay, duration, currentTime, seek, changeVolume } = useAudio(
+  const { isPlaying, togglePlay, play, duration, currentTime, seek, changeVolume } = useAudio(
     currentTrack?.src || '',
     onAutoAdvance,
     repeatMode === 'one',
@@ -54,6 +54,19 @@ const Player: React.FC<PlayerProps> = ({
   const handleVolumeChange = (value: number) => {
     changeVolume(value);
     onVolumeChange(value);
+  };
+
+  const handlePrevClick = () => {
+    if (currentTime > 3) {
+      seek(0);
+    } else {
+      onPrev();
+    }
+  };
+
+  const handleSelectTrack = (track: Track) => {
+    onSelect(track);
+    play();
   };
 
   useEffect(() => {
@@ -243,7 +256,7 @@ const Player: React.FC<PlayerProps> = ({
                 {tracks.map((t, idx) => (
                     <div 
                         key={t.id}
-                        onClick={() => onSelect(t)}
+                        onClick={() => handleSelectTrack(t)}
                         className={clsx(
                             "p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all group",
                             currentTrack?.id === t.id 
@@ -259,6 +272,14 @@ const Player: React.FC<PlayerProps> = ({
                                 </span>
                             ) : idx + 1}
                         </span>
+                        <img 
+                          src={t.coverArt || DEFAULT_COVER} 
+                          alt="" 
+                          className="w-8 h-8 rounded bg-neutral-800 object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = DEFAULT_COVER;
+                          }}
+                        />
                         <div className="min-w-0 flex-1">
                             <p className={clsx("text-sm font-medium truncate", currentTrack?.id === t.id ? "text-white" : "text-neutral-400 group-hover:text-neutral-200")}>{t.title}</p>
                             <p className="text-xs text-neutral-600 truncate">{t.artist}</p>
@@ -323,7 +344,7 @@ const Player: React.FC<PlayerProps> = ({
                 <Shuffle size={18} />
               </button>
               <div className="flex items-center gap-6">
-                <button onClick={onPrev} className="text-neutral-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full" aria-label="Previous track"><SkipBack size={24} /></button>
+                <button onClick={handlePrevClick} className="text-neutral-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full" aria-label="Previous track"><SkipBack size={24} /></button>
                 <button
                   onClick={togglePlay}
                   className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
@@ -350,60 +371,74 @@ const Player: React.FC<PlayerProps> = ({
             </div>
 
             {/* Desktop Progress */}
-            <div className="hidden md:flex flex-1 flex-col justify-center px-4">
+            <div className="hidden md:flex flex-1 flex-col justify-center px-4 group">
                  <input 
                     type="range" 
                     min={0} 
-                    max={duration || 0.1} // Avoid /0
+                    max={duration || 0.1} 
                     value={currentTime} 
                     onChange={(e) => seek(Number(e.target.value))}
-                    className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:h-2 transition-all"
+                    className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer hover:h-2 transition-all focus:outline-none focus:ring-0"
+                    style={{
+                      background: `linear-gradient(to right, #6366f1 ${(currentTime / (duration || 1)) * 100}%, #262626 ${(currentTime / (duration || 1)) * 100}%)`
+                    }}
                 />
-                <div className="flex justify-between text-xs text-neutral-500 mt-1 font-medium">
+                <div className="flex justify-between text-xs text-neutral-500 mt-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                     <span>{formatTime(currentTime)}</span>
                     <span>{formatTime(duration)}</span>
                 </div>
             </div>
 
             {/* Volume & Share */}
-            <div className="hidden md:flex items-center justify-end w-1/3 gap-3">
+            <div className="hidden md:flex items-center justify-end w-1/3 gap-4">
                 <button
                   onClick={handleShare}
-                  className="text-neutral-400 hover:text-white hover:bg-white/5 transition-colors rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="text-neutral-400 hover:text-white hover:bg-white/5 transition-colors rounded-full p-2"
                   title="Share invite link"
-                  aria-label="Share invite link"
                 >
                   <Share2 size={18} />
                 </button>
-                <button onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)} className="text-neutral-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full" aria-label={volume === 0 ? 'Unmute' : 'Mute'}>
-                  {volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                </button>
-                <input 
-                    type="range" 
-                    min={0} 
-                    max={1} 
-                    step={0.01} 
-                    value={volume} 
-                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                    className="w-24 h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-neutral-400"
-                />
+                <div className="flex items-center gap-2 group/volume">
+                  <button onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)} className="text-neutral-500 hover:text-white" aria-label={volume === 0 ? 'Unmute' : 'Mute'}>
+                    {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  </button>
+                  <input 
+                      type="range" 
+                      min={0} 
+                      max={1} 
+                      step={0.01} 
+                      value={volume} 
+                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                      className="w-20 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-neutral-400 opacity-50 group-hover/volume:opacity-100 transition-opacity"
+                      style={{
+                        background: `linear-gradient(to right, #a3a3a3 ${volume * 100}%, #262626 ${volume * 100}%)`
+                      }}
+                  />
+                </div>
             </div>
             </div>
         </div>
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-neutral-600">
-            <span className="hidden md:inline">{isShuffle ? 'Shuffle on' : 'Shuffle off'} · Repeat {repeatMode}</span>
-            <div className="ml-auto flex items-center gap-3">
+        
+        {/* Footer Status Bar */}
+        <div className="flex items-center justify-center gap-8 text-[10px] uppercase tracking-[0.2em] text-neutral-600 mt-6 border-t border-white/5 pt-4">
+            <span className={clsx("transition-colors", isShuffle && "text-indigo-400")}>
+              Shuffle {isShuffle ? 'On' : 'Off'}
+            </span>
+            <span className="text-neutral-800">•</span>
+            <span className={clsx("transition-colors", repeatMode !== 'off' && "text-indigo-400")}>
+              Repeat {repeatMode === 'one' ? '1' : repeatMode === 'off' ? 'Off' : 'All'}
+            </span>
+            <span className="text-neutral-800">•</span>
             <a
-              href="https://media.slughouse.com"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-neutral-300 hover:text-white text-xs font-semibold"
-              >
-              media.slughouse.com <ExternalLink size={14} />
-              </a>
-              <span className="text-[0.6rem] tracking-[0.45em] text-white/40">keep it close</span>
-            </div>
+              href="https://audio.slughouse.com"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-indigo-400 transition-colors"
+            >
+              audio.slughouse.com
+            </a>
         </div>
+        
         {toast && (
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-white/10 text-white text-xs px-4 py-2 rounded-full border border-white/20 backdrop-blur-md shadow-lg">
             {toast}

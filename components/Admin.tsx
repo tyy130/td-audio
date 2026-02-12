@@ -27,8 +27,15 @@ const TrackItem: React.FC<TrackItemProps> = ({ track, onDelete }) => {
         >
           <GripVertical size={18} />
         </div>
-        <div className="h-10 w-10 rounded bg-neutral-800 flex items-center justify-center flex-shrink-0 text-indigo-500">
-            <Music size={16} />
+        <div className="h-10 w-10 rounded bg-neutral-800 flex items-center justify-center flex-shrink-0 text-indigo-500 overflow-hidden">
+            <img 
+              src={track.coverArt || DEFAULT_COVER} 
+              alt="" 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = DEFAULT_COVER;
+              }}
+            />
         </div>
         <div className="min-w-0">
           <h4 className="font-medium text-neutral-200 truncate">{track.title}</h4>

@@ -81,6 +81,19 @@ export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Trac
 
   const blob = await uploadRes.json();
   const publicUrl = blob.url;
+  const extracted = blob.metadata || {};
+
+  // Merge extracted metadata with provided metadata
+  // Prioritize extracted ID3 tags for title/artist/album/duration/cover if available
+  const finalMetadata = {
+    ...metadata,
+    title: extracted.title || metadata.title,
+    artist: extracted.artist || metadata.artist,
+    duration: extracted.duration || metadata.duration || 0,
+    coverArt: extracted.coverArt || metadata.coverArt,
+    src: publicUrl,
+    storagePath: filename
+  };
 
   // Save track metadata to database
   const response = await fetch(buildUrl('/tracks'), {
@@ -89,7 +102,7 @@ export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Trac
       'Content-Type': 'application/json',
       ...(withAdminHeaders() || {}),
     },
-    body: JSON.stringify({ ...metadata, src: publicUrl, storagePath: filename }),
+    body: JSON.stringify(finalMetadata),
   });
 
   const handled = await handleResponse(response);

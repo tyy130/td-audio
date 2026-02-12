@@ -158,25 +158,27 @@ function App() {
       </div>
       <div className="relative z-10 antialiased">
         {view === AppView.PLAYER ? (
-          <Player 
-            currentTrack={currentTrack}
-            tracks={tracks}
-            onNext={handleNext}
-            onPrev={handlePrev}
-            onSelect={setCurrentTrack}
-            onAdminOpen={() => setView(AppView.ADMIN)}
-            onAutoAdvance={handleAutoAdvance}
-            isShuffle={isShuffle}
-            repeatMode={repeatMode}
-            onShuffleToggle={toggleShuffle}
-            onRepeatToggle={cycleRepeatMode}
-            volume={volume}
-            onVolumeChange={setVolume}
-            onTrackMetrics={handleTrackMetricsUpdate}
-          />
-          <div className="px-6 py-6">
-            <Comments />
-          </div>
+          <>
+            <Player 
+              currentTrack={currentTrack}
+              tracks={tracks}
+              onNext={handleNext}
+              onPrev={handlePrev}
+              onSelect={setCurrentTrack}
+              onAdminOpen={() => setView(AppView.ADMIN)}
+              onAutoAdvance={handleAutoAdvance}
+              isShuffle={isShuffle}
+              repeatMode={repeatMode}
+              onShuffleToggle={toggleShuffle}
+              onRepeatToggle={cycleRepeatMode}
+              volume={volume}
+              onVolumeChange={setVolume}
+              onTrackMetrics={handleTrackMetricsUpdate}
+            />
+            <div className="px-6 py-6">
+              <Comments />
+            </div>
+          </>
         ) : (
           <Suspense fallback={
             <div className="flex items-center justify-center min-h-screen">

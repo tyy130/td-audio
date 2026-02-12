@@ -6,22 +6,33 @@ interface VisualizerProps {
 }
 
 const Visualizer: React.FC<VisualizerProps> = ({ isPlaying }) => {
+  // Generate a symmetric pattern of heights
+  const bars = 32;
+  
   return (
-    <div className="flex items-end justify-center gap-1 h-12 w-full opacity-50">
-      {[...Array(12)].map((_, i) => (
-        <div
-          key={i}
-          className={clsx(
-            "w-1.5 bg-indigo-500 rounded-t-sm transition-all duration-300 ease-in-out",
-            isPlaying ? "animate-pulse" : "h-1"
-          )}
-          style={{
-            height: isPlaying ? `${Math.random() * 100}%` : '4px',
-            animationDuration: `${0.4 + Math.random() * 0.5}s`,
-            animationDelay: `${Math.random() * 0.2}s`
-          }}
-        />
-      ))}
+    <div className="flex items-center justify-center gap-[2px] h-16 w-full max-w-xs mx-auto opacity-60">
+      {[...Array(bars)].map((_, i) => {
+        // Calculate delay for a wave effect from center outwards or linear
+        // Let's do a symmetric wave from center
+        const center = bars / 2;
+        const dist = Math.abs(i - center);
+        const delay = dist * 0.05; 
+        
+        return (
+          <div
+            key={i}
+            className={clsx(
+              "w-1 bg-indigo-500 rounded-full transition-all ease-in-out",
+              isPlaying ? "animate-music-bar" : "h-1 opacity-20"
+            )}
+            style={{
+              animationDuration: `${0.8 + (i % 3) * 0.1}s`,
+              animationDelay: `-${delay}s`,
+              height: isPlaying ? undefined : '4px'
+            }}
+          />
+        );
+      })}
     </div>
   );
 };

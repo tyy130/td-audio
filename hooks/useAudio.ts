@@ -37,6 +37,13 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     audio.addEventListener('timeupdate', setAudioTime);
     audio.addEventListener('ended', handleEnded);
 
+    if (isPlaying) {
+        audio.play().catch(e => {
+            console.error("Auto-playback failed", e);
+            setIsPlaying(false);
+        });
+    }
+
     return () => {
       audio.pause();
       audio.removeEventListener('loadeddata', setAudioData);
@@ -57,15 +64,25 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
       }
     }, [shouldLoop]);
 
-  const togglePlay = useCallback(() => {
+  const play = useCallback(() => {
     if (!audioRef.current) return;
+    audioRef.current.play().catch(e => console.error("Playback failed", e));
+    setIsPlaying(true);
+  }, []);
+
+  const pause = useCallback(() => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    setIsPlaying(false);
+  }, []);
+
+  const togglePlay = useCallback(() => {
     if (isPlaying) {
-      audioRef.current.pause();
+      pause();
     } else {
-      audioRef.current.play().catch(e => console.error("Playback failed", e));
+      play();
     }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying]);
+  }, [isPlaying, play, pause]);
 
   const seek = useCallback((time: number) => {
     if (!audioRef.current) return;
@@ -82,6 +99,8 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     duration,
     currentTime,
     togglePlay,
+    play,
+    pause,
     seek,
     volume,
     changeVolume
