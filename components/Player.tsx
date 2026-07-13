@@ -729,7 +729,7 @@ const Player: React.FC<PlayerProps> = ({
             {repeatMode === "one" ? "1" : repeatMode === "off" ? "Off" : "All"}
           </span>
           <a
-            href="https://merch.slughouse.com"
+            href="https://slughouse.com/merch"
             target="_blank"
             rel="noreferrer"
             className="font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim/70 transition-colors hover:text-acid"
