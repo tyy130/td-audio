@@ -1,3 +1,4 @@
+import { upload } from '@vercel/blob/client';
 import { Track } from '../types';
 
 const resolveDefaultApi = () => {
@@ -6,17 +7,11 @@ const resolveDefaultApi = () => {
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:4000';
   }
-  // Default for production when deployed under media.slughouse.com
+  // Default for production when deployed under listen.slughouse.com
   return '/api';
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApi()).replace(/\/$/, '');
-const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '';
-
-const withAdminHeaders = () => {
-  if (!ADMIN_TOKEN) return undefined;
-  return { 'x-admin-token': ADMIN_TOKEN };
-};
 
 const handleResponse = async (response: Response) => {
   if (response.ok) {
@@ -48,6 +43,7 @@ interface TrackInsert {
   title: string;
   artist: string;
   coverArt?: string;
+  waveformPeaks?: number[];
   duration?: number;
   addedAt: number;
   sortOrder?: number;
@@ -62,45 +58,31 @@ export interface TrackMetrics {
 }
 
 export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Track> => {
-  // Upload file to Vercel Blob storage
   const filename = `${metadata.id}-${file.name}`;
-  
-  const uploadRes = await fetch(buildUrl(`/uploads/blob?filename=${encodeURIComponent(filename)}`), {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type,
-      ...(withAdminHeaders() || {}),
-    },
-    body: file,
+
+  const blob = await upload(filename, file, {
+    access: 'public',
+    contentType: file.type || 'audio/mpeg',
+    handleUploadUrl: buildUrl('/uploads/blob'),
+    multipart: true,
   });
-
-  if (!uploadRes.ok) {
-    const error = await uploadRes.json().catch(() => ({ message: 'Upload failed' }));
-    throw new Error(error.message || 'Failed to upload audio file');
-  }
-
-  const blob = await uploadRes.json();
   const publicUrl = blob.url;
-  const extracted = blob.metadata || {};
 
-  // Merge extracted metadata with provided metadata
-  // Prioritize extracted ID3 tags for title/artist/album/duration/cover if available
   const finalMetadata = {
     ...metadata,
-    title: extracted.title || metadata.title,
-    artist: extracted.artist || metadata.artist,
-    duration: extracted.duration || metadata.duration || 0,
-    coverArt: extracted.coverArt || metadata.coverArt,
+    title: metadata.title,
+    artist: metadata.artist,
+    duration: metadata.duration || 0,
+    coverArt: metadata.coverArt,
+    waveformPeaks: metadata.waveformPeaks,
     src: publicUrl,
-    storagePath: filename
+    storagePath: blob.pathname || filename
   };
 
-  // Save track metadata to database
   const response = await fetch(buildUrl('/tracks'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(withAdminHeaders() || {}),
     },
     body: JSON.stringify(finalMetadata),
   });
@@ -118,7 +100,6 @@ export const getAllTracks = async (): Promise<Track[]> => {
 export const deleteTrack = async (track: Track): Promise<void> => {
   const response = await fetch(buildUrl(`/tracks/${track.id}`), {
     method: 'DELETE',
-    headers: withAdminHeaders(),
   });
   await handleResponse(response);
 };
@@ -131,7 +112,6 @@ export const updateTrack = async (
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      ...(withAdminHeaders() || {}),
     },
     body: JSON.stringify(payload),
   });
@@ -144,7 +124,6 @@ export const reorderTracks = async (order: string[]): Promise<void> => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(withAdminHeaders() || {}),
     },
     body: JSON.stringify({ order }),
   });

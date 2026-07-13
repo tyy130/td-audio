@@ -1,53 +1,45 @@
-<div align="center">
-<img width="1200" height="475" alt="Slughouse Records" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+# Slughouse Listen
 
-# Slughouse Records
+Modern Slughouse media player for `listen.slughouse.com`.
 
-**Private music vault** – React + Vite frontend with Vercel serverless API and Neon Postgres.
+This repo is now set up for a Vercel deployment model: React 19 + Vite frontend, Vercel serverless API routes, Neon Postgres, and Vercel Blob-compatible uploads. It also includes your local source media under [`music/SUNO Downloads`](./music/SUNO%20Downloads).
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/your-repo/td-audio)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## Why This Base
 
-</div>
+- `td-audio` is the newest player repo and has the most mature product surface.
+- `audio-player-master` contains older but useful Hostinger/shared-host deployment scripts.
+- `slughouse-media-player` appears to be an earlier player that targeted `playback.slughouse.com`.
 
-## ✨ Features
-
-- 🔐 Password-protected library management
-- ☁️ Vercel serverless + Neon Postgres
-- 📤 S3-compatible presigned uploads
-- 🔀 Shuffle & repeat modes (off / all / one)
-- 🎨 Drag-and-drop queue reordering
-- 💾 Persistent playback settings
-- 📱 Mobile-first responsive design
-- 🎵 Exclusive "Slughouse Records" aesthetic
-
-## 🧱 Architecture
-
-| Layer | Stack |
-| --- | --- |
-| Frontend | React 19 + Vite + TypeScript + Tailwind |
-| Backend | Vercel Serverless Functions (Node.js 18) |
-| Database | Neon Serverless Postgres |
-| Storage | S3-compatible (presigned PUT uploads) |
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- Neon database ([neon.tech](https://neon.tech))
-- S3-compatible storage (R2, Backblaze, etc.)
-
-### Environment Variables
-
-Create `.env.local`:
+## Local Development
 
 ```bash
-# Frontend
-VITE_API_BASE_URL=http://localhost:3000/api
+npm install
+npm run dev
+```
 
-# Backend (set in Vercel dashboard)
+For API routes during development:
+
+```bash
+npx vercel dev
+```
+
+## Required Environment
+
+Copy [`.env.example`](./.env.example) to `.env.local` for local work:
+
+```bash
+VITE_API_BASE_URL=http://localhost:3000/api
+```
+
+Backend values are expected in the Vercel project:
+
+```bash
 DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
+APP_BASE_URL=https://listen.slughouse.com
+SESSION_SECRET=replace-with-a-long-random-string
+AUTHORIZED_ADMIN_EMAIL=1forfunnn@gmail.com
+VERCEL_APP_CLIENT_ID=your-vercel-app-client-id
+VERCEL_APP_CLIENT_SECRET=your-vercel-app-client-secret
 S3_BUCKET=your-bucket
 S3_REGION=auto
 S3_ENDPOINT=https://xxx.r2.cloudflarestorage.com
@@ -55,52 +47,39 @@ S3_ACCESS_KEY_ID=xxx
 S3_SECRET_ACCESS_KEY=xxx
 ```
 
-### Local Development
+## Vercel Setup
 
-```bash
-npm install
-npm run dev          # Frontend on :5173
-vercel dev           # API functions on :3000
-```
+1. Import this repo into Vercel.
+2. Set the framework to `Vite` if Vercel does not auto-detect it.
+3. Create a Vercel app for Sign in with Vercel.
+4. Add `https://listen.slughouse.com/api/auth/callback` as an authorization callback URL in that Vercel app.
+5. Add the environment variables from [`.env.example`](./.env.example).
+6. Run the SQL in [`schema.sql`](./schema.sql) against Neon before first use.
+7. Add the custom domain `listen.slughouse.com` in the Vercel project settings.
 
-### Deploy to Production
+The repository now uses CI only in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). Deployment should come from Vercel's Git integration instead of GitHub Actions SSH scripts.
 
-```bash
-vercel --prod
-```
+## Admin Auth
 
-## 📁 Project Structure
+Admin access is protected by Sign in with Vercel and only the exact email below is accepted server-side:
 
-```
-├── api/                  # Vercel serverless functions
-│   ├── health.js         # Health check endpoint
-│   ├── tracks/index.js   # Track CRUD operations
-│   └── uploads/presign.js# Presigned upload URLs
-├── components/           # React components
-├── hooks/                # Custom React hooks
-├── services/             # API client services
-├── App.tsx               # Main application
-└── schema.sql            # Database schema
-```
+- `1forfunnn@gmail.com`
 
-## 🔌 API Endpoints
+Write operations and blob uploads are authorized from the signed admin session cookie. There is no client-side admin password and no client-exposed admin token anymore.
 
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| GET | `/api/health` | Health check |
-| GET | `/api/tracks` | List all tracks |
-| POST | `/api/tracks` | Create track (admin) |
-| DELETE | `/api/tracks?id={id}` | Delete track (admin) |
-| POST | `/api/uploads/presign` | Get presigned upload URL |
+## API Notes
 
-## 📄 License
+The Vercel functions now include:
 
-MIT © 2024
+- `GET /api/tracks`
+- `POST /api/tracks`
+- `PATCH /api/tracks/:id`
+- `DELETE /api/tracks/:id`
+- `POST /api/tracks/reorder`
+- `POST /api/tracks/:id/play`
+- `POST /api/tracks/:id/vibe`
+- `PUT /api/uploads/blob`
 
----
+## Content Notes
 
-<div align="center">
-
-**Made by [Tyler Hill](https://tacticdev.com)**
-
-</div>
+The checked-in `music/` files are source assets for curation. The current app’s admin flow uploads tracks into blob/object storage rather than serving the local `music/` directory directly.

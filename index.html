@@ -1,41 +1,122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Slughouse Records Player</title>
+    <title>Listening Room — SLUGHOUSE RECORDS</title>
+    <meta
+      name="description"
+      content="The Slughouse Records listening room. Private catalog, straight from the source."
+    />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230c0c0b'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='system-ui,Arial,sans-serif' font-size='26' font-weight='700' fill='%23c3f53c'%3ESH%3C/text%3E%3C/svg%3E"
+    />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            colors: {
+              ink: "#e8e6e1",
+              dim: "#8a8a85",
+              line: "#2a2a28",
+              panel: "#141413",
+              acid: "#c3f53c",
+            },
+            fontFamily: {
+              display: ['"Archivo Black"', "sans-serif"],
+              sans: ["Archivo", "sans-serif"],
+              mono: ['"IBM Plex Mono"', "monospace"],
+            },
             keyframes: {
-              'music-bar': {
-                '0%, 100%': { height: '10%' },
-                '50%': { height: '80%' },
-              }
+              "music-bar": {
+                "0%, 100%": { height: "12%" },
+                "50%": { height: "90%" },
+              },
+              "fade-up": {
+                from: { opacity: "0", transform: "translateY(14px)" },
+                to: { opacity: "1", transform: "translateY(0)" },
+              },
             },
             animation: {
-              'music-bar': 'music-bar 1s ease-in-out infinite',
-            }
-          }
-        }
-      }
+              "music-bar": "music-bar 1s ease-in-out infinite",
+              "fade-up": "fade-up 0.5s cubic-bezier(0.16,1,0.3,1) both",
+            },
+          },
+        },
+      };
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      body { font-family: 'Inter', sans-serif; }
-      /* Custom scrollbar for playlist */
+      body {
+        font-family: "Archivo", sans-serif;
+        background: #0c0c0b;
+      }
+      ::selection {
+        background: #c3f53c;
+        color: #0c0c0b;
+      }
+      /* Film grain */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        pointer-events: none;
+        opacity: 0.05;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 256px 256px;
+      }
       .scrollbar-hide::-webkit-scrollbar {
-          display: none;
+        display: none;
       }
       .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      /* Sharp range inputs */
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        height: 2px;
+        background: var(--range-bg, #2a2a28);
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        margin-top: -5px;
+        height: 12px;
+        width: 12px;
+        background: #e8e6e1;
+        border: none;
+      }
+      input[type="range"]:hover::-webkit-slider-thumb,
+      input[type="range"]:focus-visible::-webkit-slider-thumb {
+        background: #c3f53c;
+      }
+      input[type="range"]::-moz-range-track {
+        height: 2px;
+        background: var(--range-bg, #2a2a28);
+      }
+      input[type="range"]::-moz-range-thumb {
+        height: 12px;
+        width: 12px;
+        background: #e8e6e1;
+        border: none;
+        border-radius: 0;
       }
     </style>
   </head>
-  <body class="bg-black text-neutral-200">
+  <body class="bg-[#0c0c0b] text-ink">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

@@ -1,9 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Track } from '../types';
-import { Reorder, useDragControls } from 'framer-motion';
-import { Trash2, GripVertical, Music, Sparkles, Upload, Lock, ArrowRight } from 'lucide-react';
-import { deleteTrack, reorderTracks, saveTrack, updateTrack } from '../services/storage';
-import { DEFAULT_COVER } from '../constants';
+import React, { useEffect, useRef, useState } from "react";
+import { Track } from "../types";
+import { Reorder, useDragControls } from "framer-motion";
+import {
+  Trash2,
+  GripVertical,
+  Music,
+  Upload,
+  Lock,
+  ArrowRight,
+  LogOut,
+} from "lucide-react";
+import {
+  deleteTrack,
+  reorderTracks,
+  saveTrack,
+  updateTrack,
+} from "../services/storage";
+import { extractEmbeddedCoverArt } from "../services/embeddedArt";
+import { extractWaveformPeaks } from "../services/waveformPeaks";
+import { DEFAULT_COVER } from "../constants";
+
+const focusRing =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acid focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0b]";
+
+const inputStyles =
+  "w-full bg-[#0c0c0b] border border-line px-4 py-2.5 text-sm text-ink placeholder-dim/50 transition-colors focus:outline-none focus:border-acid";
+
+const labelStyles =
+  "block font-mono text-[0.6rem] uppercase tracking-[0.3em] text-dim mb-2";
 
 interface TrackItemProps {
   track: Track;
@@ -18,40 +42,47 @@ const TrackItem: React.FC<TrackItemProps> = ({ track, onDelete }) => {
       value={track}
       dragListener={false}
       dragControls={controls}
-      className="flex items-center justify-between bg-neutral-900/40 border border-neutral-800/50 p-3 rounded-xl hover:bg-neutral-800/50 transition-colors group"
+      className="group flex items-center justify-between border-b border-line bg-[#0c0c0b] px-3 py-3 transition-colors hover:bg-panel/60"
     >
-      <div className="flex items-center gap-4 overflow-hidden">
+      <div className="flex items-center gap-3 overflow-hidden">
         <div
-          className="cursor-grab touch-none text-neutral-600 hover:text-neutral-300 active:cursor-grabbing p-2"
+          className="cursor-grab touch-none p-2 text-dim/50 hover:text-ink active:cursor-grabbing"
           onPointerDown={(e) => controls.start(e)}
         >
-          <GripVertical size={18} />
+          <GripVertical size={16} />
         </div>
-        <div className="h-10 w-10 rounded bg-neutral-800 flex items-center justify-center flex-shrink-0 text-indigo-500 overflow-hidden">
-            <img 
-              src={track.coverArt || DEFAULT_COVER} 
-              alt="" 
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = DEFAULT_COVER;
-              }}
-            />
+        <div className="h-10 w-10 flex-shrink-0 overflow-hidden border border-line bg-panel">
+          <img
+            src={track.coverArt || DEFAULT_COVER}
+            alt=""
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = DEFAULT_COVER;
+            }}
+          />
         </div>
         <div className="min-w-0">
-          <h4 className="font-medium text-neutral-200 truncate">{track.title}</h4>
-          <p className="text-sm text-neutral-500 truncate">{track.artist}</p>
-          <p className="text-[11px] text-neutral-600 mt-1 flex items-center gap-3">
-            <span className="inline-flex items-center gap-1">▶ {track.playCount ?? 0}</span>
-            <span className="inline-flex items-center gap-1">✦ {(track.vibeAverage ?? 0).toFixed(1)}</span>
+          <h4 className="truncate text-sm font-medium text-ink">
+            {track.title}
+          </h4>
+          <p className="truncate font-mono text-[0.65rem] uppercase tracking-[0.15em] text-dim">
+            {track.artist}
+          </p>
+          <p className="mt-1 flex items-center gap-4 font-mono text-[0.6rem] text-dim/70">
+            <span>{track.playCount ?? 0} plays</span>
+            <span className="text-acid/80">
+              {(track.vibeAverage ?? 0).toFixed(1)} res
+            </span>
           </p>
         </div>
       </div>
-      
-      <button 
+
+      <button
         onClick={onDelete}
-        className="p-2 text-neutral-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+        className={`p-2 text-dim/50 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100 ${focusRing}`}
+        aria-label={`Delete ${track.title}`}
       >
-        <Trash2 size={18} />
+        <Trash2 size={16} />
       </button>
     </Reorder.Item>
   );
@@ -64,29 +95,84 @@ interface AdminProps {
   onClose: () => void;
 }
 
-const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClose }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+interface AdminUser {
+  email: string;
+  name?: string | null;
+  picture?: string | null;
+}
+
+const Admin: React.FC<AdminProps> = ({
+  tracks,
+  setTracks,
+  onTrackUpdated,
+  onClose,
+}) => {
+  const [authStatus, setAuthStatus] = useState<
+    "checking" | "authenticated" | "unauthenticated"
+  >("checking");
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [newTrackTitle, setNewTrackTitle] = useState('');
-  const [newTrackArtist, setNewTrackArtist] = useState('');
-  const [editTrackId, setEditTrackId] = useState('');
-  const [editTitle, setEditTitle] = useState('');
-  const [editArtist, setEditArtist] = useState('');
+  const [newTrackTitle, setNewTrackTitle] = useState("");
+  const [newTrackArtist, setNewTrackArtist] = useState("");
+  const [editTrackId, setEditTrackId] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editArtist, setEditArtist] = useState("");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [orderDirty, setOrderDirty] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleLogin = (e?: React.FormEvent) => {
-      e?.preventDefault();
-      // Simple client-side check for demo
-      if (password === 'admin') {
-          setIsAuthenticated(true);
-      } else {
-          alert('Incorrect password. Hint: admin');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nextError = params.get("auth_error");
+    if (nextError) {
+      setAuthError(nextError);
+      params.delete("auth_error");
+      const next = params.toString();
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${next ? `?${next}` : ""}`,
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        if (!response.ok) {
+          setAuthStatus("unauthenticated");
+          setAdminUser(null);
+          return;
+        }
+
+        const payload = await response.json();
+        setAdminUser(payload.user || null);
+        setAuthStatus("authenticated");
+      } catch (err) {
+        console.error(err);
+        setAuthStatus("unauthenticated");
+        setAdminUser(null);
       }
+    };
+
+    checkSession();
+  }, []);
+
+  const handleLogin = () => {
+    window.location.href = "/api/auth/authorize";
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+    } finally {
+      setAdminUser(null);
+      setAuthStatus("unauthenticated");
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,11 +180,11 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClos
     if (!file) return;
 
     setIsUploading(true);
-    
+
     // Auto-fill metadata from filename if empty
     const fileName = file.name.replace(/\.[^/.]+$/, "");
     if (!newTrackTitle) setNewTrackTitle(fileName);
-    if (!newTrackArtist) setNewTrackArtist('Unknown Artist');
+    if (!newTrackArtist) setNewTrackArtist("Unknown Artist");
 
     setIsUploading(false);
   };
@@ -113,40 +199,45 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClos
     setIsUploading(true);
 
     const id = crypto.randomUUID();
+    const [coverArt, waveform] = await Promise.all([
+      extractEmbeddedCoverArt(file),
+      extractWaveformPeaks(file),
+    ]);
     const metadata = {
       id,
       title: newTrackTitle || "Untitled",
       artist: newTrackArtist || "Unknown",
-      duration: 0,
+      duration: waveform.duration || 0,
       addedAt: Date.now(),
-      coverArt: DEFAULT_COVER
+      coverArt,
+      waveformPeaks: waveform.peaks,
     };
 
     try {
       const savedTrack = await saveTrack(metadata, file);
-      setTracks(prev => [...prev, savedTrack]);
+      setTracks((prev) => [...prev, savedTrack]);
     } catch (err) {
       console.error(err);
-      const message = err instanceof Error ? err.message : 'Upload failed';
+      const message = err instanceof Error ? err.message : "Upload failed";
       alert(`Failed to upload track: ${message}`);
     }
-    
+
     // Reset form
-    setNewTrackTitle('');
-    setNewTrackArtist('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setNewTrackTitle("");
+    setNewTrackArtist("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setIsUploading(false);
   };
 
   const handleDelete = async (id: string) => {
-      const track = tracks.find(t => t.id === id);
-      if (!track) return;
-      try {
-        await deleteTrack(track);
-        setTracks(prev => prev.filter(t => t.id !== id));
-      } catch (err) {
+    const track = tracks.find((t) => t.id === id);
+    if (!track) return;
+    try {
+      await deleteTrack(track);
+      setTracks((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
       console.error(err);
-      alert('Unable to delete track from the server.');
+      alert("Unable to delete track from the server.");
     }
   };
 
@@ -159,13 +250,13 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClos
   const handleSelectEdit = (id: string) => {
     setEditTrackId(id);
     const target = tracks.find((t) => t.id === id);
-    setEditTitle(target?.title || '');
-    setEditArtist(target?.artist || '');
+    setEditTitle(target?.title || "");
+    setEditArtist(target?.artist || "");
   };
 
   const handleUpdateTrack = async () => {
     if (!editTrackId) {
-      alert('Select a track to edit.');
+      alert("Select a track to edit.");
       return;
     }
 
@@ -178,10 +269,10 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClos
 
       setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       onTrackUpdated(updated);
-      setToastMessage('Track updated');
+      setToastMessage("Track updated");
     } catch (err) {
       console.error(err);
-      alert('Unable to update track.');
+      alert("Unable to update track.");
     } finally {
       setIsUpdating(false);
     }
@@ -193,202 +284,283 @@ const Admin: React.FC<AdminProps> = ({ tracks, setTracks, onTrackUpdated, onClos
     try {
       await reorderTracks(tracks.map((t) => t.id));
       setOrderDirty(false);
-      setToastMessage('Queue order saved');
+      setToastMessage("Queue order saved");
     } catch (err) {
       console.error(err);
-      alert('Unable to save order.');
+      alert("Unable to save order.");
     } finally {
       setIsSavingOrder(false);
     }
   };
 
-    if (!isAuthenticated) {
-      return (
-        <div className="relative flex items-center justify-center min-h-screen w-full bg-gradient-to-b from-black via-[#050011] to-black py-16 px-4">
-          <div className="absolute inset-0 pointer-events-none opacity-60">
-            <div className="absolute top-10 left-1/2 -translate-x-1/2 w-72 h-72 bg-indigo-600/30 blur-[140px]"></div>
-            <div className="absolute bottom-0 right-12 w-64 h-64 bg-purple-600/20 blur-[130px]"></div>
+  if (authStatus !== "authenticated") {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#0c0c0b] px-4 py-16">
+        <div className="w-full max-w-sm border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-6 py-3">
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.4em] text-dim">
+              Slughouse Records
+            </span>
+            <Lock size={14} className="text-acid" aria-hidden="true" />
           </div>
-          <div className="relative w-full max-w-sm p-8 bg-neutral-950 rounded-2xl border border-white/5 text-center shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-                  <div className="w-12 h-12 bg-neutral-800 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-500">
-                      <Lock size={20} />
-                  </div>
-            <h2 className="text-2xl font-bold text-white mb-2 tracking-wide">Admin Access</h2>
-            <p className="text-neutral-400 text-sm uppercase tracking-[0.35em] mb-6">vault credentials</p>
-                  <form onSubmit={handleLogin} className="space-y-4">
-                      <input 
-                          type="password" 
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Password"
-                className="w-full bg-black/80 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                      />
-                      <button 
-                          type="submit"
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                      >
-                          Login <ArrowRight size={16} />
-                      </button>
-                  </form>
-            <button onClick={onClose} className="mt-6 text-sm text-neutral-500 hover:text-white">
-                      Cancel and go back
-                  </button>
+          <div className="px-6 py-8">
+            <h2 className="font-display text-2xl uppercase leading-none tracking-tight text-ink">
+              Vault
+              <span className="block text-acid">Access</span>
+            </h2>
+            <p className="mt-4 font-mono text-[0.6rem] uppercase tracking-[0.3em] text-dim">
+              Vercel protected — staff only
+            </p>
+            <p className="mt-4 text-sm leading-relaxed text-dim">
+              Sign in with a verified Vercel account to manage the catalog.
+            </p>
+            {authError ? (
+              <div className="mt-4 border border-red-500/40 bg-red-500/10 px-4 py-3 font-mono text-xs text-red-300">
+                {authError}
               </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={authStatus === "checking"}
+              className={`mt-6 flex w-full items-center justify-center gap-2 bg-acid py-3.5 font-mono text-xs uppercase tracking-[0.2em] text-black transition-transform hover:scale-[1.02] disabled:opacity-60 ${focusRing}`}
+            >
+              {authStatus === "checking"
+                ? "Checking session…"
+                : "Sign in with Vercel"}
+              <ArrowRight size={14} />
+            </button>
+            <button
+              onClick={onClose}
+              className={`mt-4 w-full py-2 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-ink ${focusRing}`}
+            >
+              ← Back to the listening room
+            </button>
           </div>
-      );
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6 pb-24 bg-black min-h-screen">
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-3xl font-bold text-white">Library Manager</h2>
-        <button onClick={onClose} className="text-sm font-medium text-neutral-500 hover:text-white transition-colors">
-          Back to Player
-        </button>
-      </div>
-
-      {/* Upload Section */}
-      <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 mb-8 backdrop-blur-sm">
-        <h3 className="text-xl font-semibold text-indigo-400 mb-4 flex items-center gap-2">
-          <Upload size={20} /> Add New Track
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Title</label>
-            <input
-              type="text"
-              value={newTrackTitle}
-              onChange={(e) => setNewTrackTitle(e.target.value)}
-              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="Song Title"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Artist</label>
-            <input
-              type="text"
-              value={newTrackArtist}
-              onChange={(e) => setNewTrackArtist(e.target.value)}
-              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="Artist Name"
-            />
-          </div>
+    <div className="min-h-screen bg-[#0c0c0b] text-ink">
+      {/* Header */}
+      <header className="flex items-stretch justify-between border-b border-line">
+        <div className="flex flex-col gap-0.5 px-4 py-3 md:px-6">
+          <span className="font-mono text-[0.6rem] uppercase tracking-[0.4em] text-dim">
+            The Vault — Library Manager
+          </span>
+          <span className="font-display text-lg uppercase leading-none tracking-tight md:text-xl">
+            Slughouse Records
+          </span>
         </div>
-
-        <div className="flex flex-col md:flex-row gap-4 items-center">
-           <label className="flex-1 w-full flex flex-col items-center px-4 py-6 bg-black text-blue rounded-lg shadow-lg tracking-wide uppercase border border-neutral-800 cursor-pointer hover:bg-neutral-900 hover:border-indigo-500 transition-all">
-                <Music className="w-8 h-8 text-indigo-500" />
-                <span className="mt-2 text-base leading-normal text-neutral-300">Select Audio File</span>
-                <input type='file' className="hidden" accept="audio/*" ref={fileInputRef} onChange={handleFileUpload} />
-            </label>
-            
-            <button 
-              onClick={handleAddTrack}
-              disabled={isUploading}
-              className="h-full w-full md:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-            >
-              {isUploading ? (
-                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-              ) : (
-                 <Sparkles size={18} />
-              )}
-              {isUploading ? 'Processing...' : 'Add to Library'}
-            </button>
-        </div>
-        <p className="text-xs text-neutral-600 mt-4">
-          * Tracks upload directly to the Hostinger vault via the API.
-        </p>
-      </div>
-
-      {/* Edit Section */}
-      <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 mb-8 backdrop-blur-sm">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-semibold text-white mb-1">Edit Metadata</h3>
-            <p className="text-neutral-500 text-sm">Update titles or artists without re-uploading audio.</p>
-          </div>
+        <div className="flex items-stretch">
+          <span className="hidden items-center border-l border-line px-5 font-mono text-[0.6rem] uppercase tracking-[0.2em] text-dim md:flex">
+            {adminUser?.email}
+          </span>
           <button
-            onClick={handleSaveOrder}
-            disabled={!orderDirty || isSavingOrder}
-            className="px-4 py-2 rounded-lg border border-indigo-500 text-indigo-100 bg-indigo-600/20 hover:bg-indigo-600/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={handleLogout}
+            className={`flex items-center gap-2 border-l border-line px-4 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:bg-panel hover:text-ink ${focusRing}`}
           >
-            {isSavingOrder ? 'Saving order...' : orderDirty ? 'Save queue order' : 'Order saved'}
+            <LogOut size={14} />
+            <span className="hidden sm:inline">Sign out</span>
+          </button>
+          <button
+            onClick={onClose}
+            className={`flex items-center border-l border-line px-4 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:bg-panel hover:text-acid md:px-6 ${focusRing}`}
+          >
+            ← Player
           </button>
         </div>
+      </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div>
-            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Track</label>
-            <select
-              value={editTrackId}
-              onChange={(e) => handleSelectEdit(e.target.value)}
-              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">Select track</option>
-              {tracks.map((track) => (
-                <option key={track.id} value={track.id}>
-                  {track.title} · {track.artist}
-                </option>
-              ))}
-            </select>
+      <div className="mx-auto w-full max-w-4xl px-4 pb-24 pt-8 md:px-6">
+        {/* Upload Section */}
+        <section className="border border-line">
+          <div className="flex items-center gap-3 border-b border-line bg-panel px-5 py-3">
+            <span className="font-mono text-[0.65rem] text-acid">01</span>
+            <h3 className="flex items-center gap-2 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-ink">
+              <Upload size={13} /> Add New Track
+            </h3>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Title</label>
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
-              placeholder="Song Title"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-500 uppercase mb-1">Artist</label>
-            <input
-              type="text"
-              value={editArtist}
-              onChange={(e) => setEditArtist(e.target.value)}
-              className="w-full bg-black border border-neutral-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
-              placeholder="Artist"
-            />
-          </div>
-        </div>
-        <div className="mt-4">
-          <button
-            onClick={handleUpdateTrack}
-            disabled={isUpdating}
-            className="px-5 py-3 bg-white text-black rounded-lg font-semibold hover:bg-neutral-100 transition-colors disabled:opacity-50"
-          >
-            {isUpdating ? 'Saving...' : 'Update Track'}
-          </button>
-        </div>
-      </div>
 
-      {/* Track List */}
-      <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-neutral-300 mb-4">Current Tracks</h3>
-        <Reorder.Group
-          axis="y"
-          values={tracks}
-          onReorder={(next) => {
-            setTracks(next);
-            setOrderDirty(true);
-          }}
-          className="space-y-2"
-        >
-          {tracks.map((track) => (
-            <TrackItem key={track.id} track={track} onDelete={() => handleDelete(track.id)} />
-          ))}
-        </Reorder.Group>
-        {tracks.length === 0 && (
-            <div className="text-center py-12 text-neutral-600 border-2 border-dashed border-neutral-900 rounded-xl bg-neutral-900/30">
-                No tracks yet. Upload some music!
+          <div className="p-5">
+            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className={labelStyles}>Title</label>
+                <input
+                  type="text"
+                  value={newTrackTitle}
+                  onChange={(e) => setNewTrackTitle(e.target.value)}
+                  className={inputStyles}
+                  placeholder="Song Title"
+                />
+              </div>
+              <div>
+                <label className={labelStyles}>Artist</label>
+                <input
+                  type="text"
+                  value={newTrackArtist}
+                  onChange={(e) => setNewTrackArtist(e.target.value)}
+                  className={inputStyles}
+                  placeholder="Artist Name"
+                />
+              </div>
             </div>
-        )}
+
+            <div className="flex flex-col items-stretch gap-4 md:flex-row">
+              <label
+                className={`flex flex-1 cursor-pointer flex-col items-center border border-dashed border-line px-4 py-6 transition-colors hover:border-acid hover:bg-panel ${focusRing}`}
+              >
+                <Music className="h-7 w-7 text-acid" />
+                <span className="mt-2 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim">
+                  Select Audio File
+                </span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="audio/*"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                />
+              </label>
+
+              <button
+                onClick={handleAddTrack}
+                disabled={isUploading}
+                className={`flex w-full items-center justify-center gap-2 bg-acid px-8 py-4 font-mono text-xs uppercase tracking-[0.2em] text-black transition-transform hover:scale-[1.02] disabled:opacity-60 md:w-auto ${focusRing}`}
+              >
+                {isUploading ? (
+                  <span className="h-4 w-4 animate-spin border-2 border-black/30 border-t-black"></span>
+                ) : null}
+                {isUploading ? "Processing…" : "Add to Vault"}
+              </button>
+            </div>
+            <p className="mt-4 font-mono text-[0.6rem] uppercase tracking-[0.15em] text-dim/70">
+              Tracks upload straight to the vault — embedded album art is picked
+              up automatically.
+            </p>
+          </div>
+        </section>
+
+        {/* Edit Section */}
+        <section className="mt-6 border border-line">
+          <div className="flex items-center justify-between gap-3 border-b border-line bg-panel px-5 py-3">
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[0.65rem] text-acid">02</span>
+              <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-ink">
+                Edit Metadata
+              </h3>
+            </div>
+            <button
+              onClick={handleSaveOrder}
+              disabled={!orderDirty || isSavingOrder}
+              className={`border px-4 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.2em] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                orderDirty
+                  ? "border-acid text-acid hover:bg-acid hover:text-black"
+                  : "border-line text-dim"
+              } ${focusRing}`}
+            >
+              {isSavingOrder
+                ? "Saving…"
+                : orderDirty
+                  ? "Save queue order"
+                  : "Order saved"}
+            </button>
+          </div>
+
+          <div className="p-5">
+            <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-3">
+              <div>
+                <label className={labelStyles}>Track</label>
+                <select
+                  value={editTrackId}
+                  onChange={(e) => handleSelectEdit(e.target.value)}
+                  className={inputStyles}
+                >
+                  <option value="">Select track</option>
+                  {tracks.map((track) => (
+                    <option key={track.id} value={track.id}>
+                      {track.title} · {track.artist}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelStyles}>Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className={inputStyles}
+                  placeholder="Song Title"
+                />
+              </div>
+              <div>
+                <label className={labelStyles}>Artist</label>
+                <input
+                  type="text"
+                  value={editArtist}
+                  onChange={(e) => setEditArtist(e.target.value)}
+                  className={inputStyles}
+                  placeholder="Artist"
+                />
+              </div>
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={handleUpdateTrack}
+                disabled={isUpdating}
+                className={`border border-ink px-6 py-3 font-mono text-xs uppercase tracking-[0.2em] text-ink transition-colors hover:bg-ink hover:text-black disabled:opacity-50 ${focusRing}`}
+              >
+                {isUpdating ? "Saving…" : "Update Track"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Track List */}
+        <section className="mt-6 border border-line">
+          <div className="flex items-center justify-between border-b border-line bg-panel px-5 py-3">
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[0.65rem] text-acid">03</span>
+              <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-ink">
+                Catalog
+              </h3>
+            </div>
+            <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-dim">
+              {tracks.length} {tracks.length === 1 ? "Track" : "Tracks"}
+            </span>
+          </div>
+          <Reorder.Group
+            axis="y"
+            values={tracks}
+            onReorder={(next) => {
+              setTracks(next);
+              setOrderDirty(true);
+            }}
+          >
+            {tracks.map((track) => (
+              <TrackItem
+                key={track.id}
+                track={track}
+                onDelete={() => handleDelete(track.id)}
+              />
+            ))}
+          </Reorder.Group>
+          {tracks.length === 0 && (
+            <div className="px-5 py-12 text-center font-mono text-xs uppercase tracking-[0.2em] text-dim">
+              No tracks yet. Upload some music.
+            </div>
+          )}
+        </section>
       </div>
+
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 text-white text-sm px-4 py-2 rounded-full border border-white/20 backdrop-blur-md shadow-lg">
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 border border-acid bg-[#0c0c0b] px-4 py-2 font-mono text-xs uppercase tracking-[0.15em] text-acid"
+        >
           {toastMessage}
         </div>
       )}

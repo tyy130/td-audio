@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS tracks (
   audio_url TEXT NOT NULL,
   audio_path TEXT DEFAULT NULL,
   cover_art TEXT DEFAULT NULL,
+  waveform_peaks TEXT DEFAULT NULL,
   duration INT DEFAULT 0,
   added_at BIGINT NOT NULL,
   sort_order INT NOT NULL DEFAULT 0

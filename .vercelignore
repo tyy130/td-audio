@@ -6,3 +6,4 @@ php-backend/**
 playback/**
 # Explicitly ignore preserved Hostinger PHP copy
 api/index.php.hostinger
+music/**
