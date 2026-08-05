@@ -57,7 +57,11 @@ export interface TrackMetrics {
   lastPlayedAt?: number;
 }
 
-export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Track> => {
+export const saveTrack = async (
+  metadata: TrackInsert,
+  file: File,
+  coverFile?: File,
+): Promise<Track> => {
   const filename = `${metadata.id}-${file.name}`;
 
   const blob = await upload(filename, file, {
@@ -68,12 +72,27 @@ export const saveTrack = async (metadata: TrackInsert, file: File): Promise<Trac
   });
   const publicUrl = blob.url;
 
+  let coverUrl = metadata.coverArt;
+  if (coverFile) {
+    try {
+      const coverBlob = await upload(`${metadata.id}-cover.jpg`, coverFile, {
+        access: 'public',
+        contentType: coverFile.type || 'image/jpeg',
+        handleUploadUrl: buildUrl('/uploads/blob'),
+        multipart: false,
+      });
+      coverUrl = coverBlob.url;
+    } catch (error) {
+      console.warn('Unable to upload cover art', error);
+    }
+  }
+
   const finalMetadata = {
     ...metadata,
     title: metadata.title,
     artist: metadata.artist,
     duration: metadata.duration || 0,
-    coverArt: metadata.coverArt,
+    coverArt: coverUrl,
     waveformPeaks: metadata.waveformPeaks,
     src: publicUrl,
     storagePath: blob.pathname || filename

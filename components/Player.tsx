@@ -281,7 +281,7 @@ const Player: React.FC<PlayerProps> = ({
       </header>
 
       {/* Main */}
-      <main className="grid min-h-0 flex-1 grid-rows-[auto_1fr] overflow-y-auto lg:grid-rows-1 lg:overflow-hidden lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_460px]">
+      <main className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-rows-1 lg:overflow-hidden lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_460px]">
         {/* Now Playing */}
         <section className="relative flex flex-col justify-center px-4 py-10 md:px-10 lg:overflow-y-auto lg:py-6">
           {isLibraryLoading ? (

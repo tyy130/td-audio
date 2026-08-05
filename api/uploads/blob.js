@@ -17,7 +17,7 @@ export default async function handler(req, res) {
       request: req,
       body,
       onBeforeGenerateToken: async (pathname, _clientPayload, multipart) => ({
-        allowedContentTypes: ['audio/*', 'video/mp4'],
+        allowedContentTypes: ['audio/*', 'video/mp4', 'image/*'],
         maximumSizeInBytes: 1024 * 1024 * 1024,
         addRandomSuffix: false,
         allowOverwrite: true,

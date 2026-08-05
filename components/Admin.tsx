@@ -17,6 +17,7 @@ import {
   updateTrack,
 } from "../services/storage";
 import { extractEmbeddedCoverArt } from "../services/embeddedArt";
+import { reencodeCoverArt } from "../services/coverArt";
 import { extractWaveformPeaks } from "../services/waveformPeaks";
 import { DEFAULT_COVER } from "../constants";
 
@@ -123,6 +124,7 @@ const Admin: React.FC<AdminProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -199,22 +201,36 @@ const Admin: React.FC<AdminProps> = ({
     setIsUploading(true);
 
     const id = crypto.randomUUID();
-    const [coverArt, waveform] = await Promise.all([
+    const [embeddedCover, waveform] = await Promise.all([
       extractEmbeddedCoverArt(file),
       extractWaveformPeaks(file),
     ]);
+
+    let coverFile: File | undefined;
+    const manualCover = coverInputRef.current?.files?.[0];
+    if (manualCover) {
+      coverFile = (await reencodeCoverArt(manualCover)) ?? undefined;
+    } else if (embeddedCover) {
+      try {
+        const embeddedBlob = await (await fetch(embeddedCover)).blob();
+        coverFile = (await reencodeCoverArt(embeddedBlob)) ?? undefined;
+      } catch (err) {
+        console.warn("Unable to process embedded cover art", err);
+      }
+    }
+
     const metadata = {
       id,
       title: newTrackTitle || "Untitled",
       artist: newTrackArtist || "Unknown",
       duration: waveform.duration || 0,
       addedAt: Date.now(),
-      coverArt,
+      coverArt: undefined,
       waveformPeaks: waveform.peaks,
     };
 
     try {
-      const savedTrack = await saveTrack(metadata, file);
+      const savedTrack = await saveTrack(metadata, file, coverFile);
       setTracks((prev) => [...prev, savedTrack]);
     } catch (err) {
       console.error(err);
@@ -226,6 +242,7 @@ const Admin: React.FC<AdminProps> = ({
     setNewTrackTitle("");
     setNewTrackArtist("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (coverInputRef.current) coverInputRef.current.value = "";
     setIsUploading(false);
   };
 
@@ -422,6 +439,24 @@ const Admin: React.FC<AdminProps> = ({
                   accept="audio/*"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
+                />
+              </label>
+
+              <label
+                className={`flex flex-1 cursor-pointer flex-col items-center border border-dashed border-line px-4 py-6 transition-colors hover:border-acid hover:bg-panel ${focusRing}`}
+              >
+                <Upload className="h-7 w-7 text-acid" />
+                <span className="mt-2 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim">
+                  Cover Art (optional)
+                </span>
+                <span className="mt-1 font-mono text-[0.55rem] uppercase tracking-[0.15em] text-dim/60">
+                  Overrides embedded album art
+                </span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  ref={coverInputRef}
                 />
               </label>
 
