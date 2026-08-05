@@ -17,8 +17,7 @@ import Visualizer from "./Visualizer";
 import { useAudio } from "../hooks/useAudio";
 import { clsx } from "clsx";
 import { DEFAULT_COVER } from "../constants";
-import { recordPlayback, sendVibe, saveWaveformPeaks, TrackMetrics } from "../services/storage";
-import { extractWaveformPeaksFromUrl } from "../services/waveformPeaks";
+import { recordPlayback, sendVibe, TrackMetrics } from "../services/storage";
 
 interface PlayerProps {
   currentTrack: Track | null;
@@ -86,21 +85,11 @@ const Player: React.FC<PlayerProps> = ({
   const [resonance, setResonance] = useState(3);
   const [isSubmittingVibe, setIsSubmittingVibe] = useState(false);
   const [playRecordedFor, setPlayRecordedFor] = useState<string | null>(null);
-  const [derivedWaveformPeaks, setDerivedWaveformPeaks] = useState<
-    { trackId: string; peaks?: number[] } | undefined
-  >(undefined);
   const queuedTrackToPlayRef = useRef<string | null>(null);
 
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.id === currentTrack.id)
     : -1;
-
-  const displayPeaks =
-    currentTrack?.waveformPeaks?.length
-      ? currentTrack.waveformPeaks
-      : currentTrack && derivedWaveformPeaks?.trackId === currentTrack.id
-        ? derivedWaveformPeaks.peaks
-        : undefined;
 
   const handleVolumeChange = (value: number) => {
     changeVolume(value);
@@ -130,39 +119,6 @@ const Player: React.FC<PlayerProps> = ({
     const id = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(id);
   }, [toast]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!currentTrack?.src) {
-      setDerivedWaveformPeaks(undefined);
-      return;
-    }
-
-    if (currentTrack.waveformPeaks?.length) {
-      setDerivedWaveformPeaks(undefined);
-      return;
-    }
-
-    extractWaveformPeaksFromUrl(currentTrack.src).then((analysis) => {
-      if (cancelled) return;
-      setDerivedWaveformPeaks({
-        trackId: currentTrack.id,
-        peaks: analysis.peaks,
-      });
-      if (analysis.peaks?.length) {
-        saveWaveformPeaks(
-          currentTrack.id,
-          analysis.peaks,
-          analysis.duration,
-        ).catch(() => {});
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentTrack?.id, currentTrack?.src, currentTrack?.waveformPeaks]);
 
   useEffect(() => {
     if (!currentTrack || queuedTrackToPlayRef.current !== currentTrack.id) {
@@ -388,11 +344,7 @@ const Player: React.FC<PlayerProps> = ({
                 <Visualizer
                   isPlaying={isPlaying}
                   waveformData={waveformData}
-                  peaks={displayPeaks}
-                  duration={currentTrack?.duration || duration}
-                  currentTime={currentTime}
                   progress={duration > 0 ? currentTime / duration : 0}
-                  onSeek={seek}
                 />
               </div>
 

@@ -80,6 +80,12 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
       await audioContextRef.current.resume();
     }
 
+    if (audioContextRef.current.state !== 'running') {
+      console.warn('AudioContext not running; audio output may be silent', {
+        state: audioContextRef.current.state,
+      });
+    }
+
     return analyserRef.current;
   }, []);
 
@@ -91,6 +97,7 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     const audio = new Audio();
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
+    audio.muted = false;
     audio.volume = initialVolume;
     audio.loop = shouldLoop;
     audioRef.current = audio;

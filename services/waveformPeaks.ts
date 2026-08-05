@@ -1,5 +1,4 @@
 const PEAK_SAMPLES = 180;
-const waveformCache = new Map<string, WaveformAnalysis>();
 
 const normalizePeaks = (values: number[]) => {
   const max = Math.max(...values, 0.0001);
@@ -54,25 +53,4 @@ const analyzeWaveformBlob = async (blob: Blob): Promise<WaveformAnalysis> => {
 
 export const extractWaveformPeaks = async (file: File): Promise<WaveformAnalysis> => {
   return analyzeWaveformBlob(file);
-};
-
-export const extractWaveformPeaksFromUrl = async (url: string): Promise<WaveformAnalysis> => {
-  if (waveformCache.has(url)) {
-    return waveformCache.get(url) as WaveformAnalysis;
-  }
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Unable to fetch audio for waveform (${response.status})`);
-    }
-
-    const blob = await response.blob();
-    const analysis = await analyzeWaveformBlob(blob);
-    waveformCache.set(url, analysis);
-    return analysis;
-  } catch (error) {
-    console.warn('Unable to extract waveform peaks from URL', error);
-    return { duration: 0 };
-  }
 };
