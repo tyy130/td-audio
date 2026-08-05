@@ -116,6 +116,22 @@ export const getAllTracks = async (): Promise<Track[]> => {
   return handled.json();
 };
 
+export const saveWaveformPeaks = async (
+  id: string,
+  peaks: number[],
+  duration?: number,
+): Promise<void> => {
+  const response = await fetch(
+    buildUrl(`/tracks/${encodeURIComponent(id)}/waveform`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peaks, duration }),
+    },
+  );
+  await handleResponse(response);
+};
+
 export const deleteTrack = async (track: Track): Promise<void> => {
   const response = await fetch(buildUrl(`/tracks/${track.id}`), {
     method: 'DELETE',

@@ -17,7 +17,7 @@ import Visualizer from "./Visualizer";
 import { useAudio } from "../hooks/useAudio";
 import { clsx } from "clsx";
 import { DEFAULT_COVER } from "../constants";
-import { recordPlayback, sendVibe, TrackMetrics } from "../services/storage";
+import { recordPlayback, sendVibe, saveWaveformPeaks, TrackMetrics } from "../services/storage";
 import { extractWaveformPeaksFromUrl } from "../services/waveformPeaks";
 
 interface PlayerProps {
@@ -150,6 +150,13 @@ const Player: React.FC<PlayerProps> = ({
         trackId: currentTrack.id,
         peaks: analysis.peaks,
       });
+      if (analysis.peaks?.length) {
+        saveWaveformPeaks(
+          currentTrack.id,
+          analysis.peaks,
+          analysis.duration,
+        ).catch(() => {});
+      }
     });
 
     return () => {
