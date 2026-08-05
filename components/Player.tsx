@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Track, RepeatMode } from "../types";
 import {
   Play,
@@ -46,6 +46,24 @@ const formatTime = (time: number) => {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+type GroupBy = "artist" | "genre";
+
+const groupTracks = (tracks: Track[], groupBy: GroupBy) => {
+  const groups = new Map<string, Track[]>();
+  for (const track of tracks) {
+    const label =
+      (groupBy === "genre"
+        ? track.genre?.trim()
+        : track.artist?.trim()) || "Uncategorized";
+    const list = groups.get(label) ?? [];
+    list.push(track);
+    groups.set(label, list);
+  }
+  return [...groups.entries()]
+    .map(([label, list]) => ({ label, list }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+};
+
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acid focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0b]";
 
@@ -86,6 +104,8 @@ const Player: React.FC<PlayerProps> = ({
   const [isSubmittingVibe, setIsSubmittingVibe] = useState(false);
   const [playRecordedFor, setPlayRecordedFor] = useState<string | null>(null);
   const queuedTrackToPlayRef = useRef<string | null>(null);
+  const [groupBy, setGroupBy] = useState<GroupBy>("artist");
+  const grouped = useMemo(() => groupTracks(tracks, groupBy), [tracks, groupBy]);
 
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.id === currentTrack.id)
@@ -430,6 +450,27 @@ const Player: React.FC<PlayerProps> = ({
                 : `${tracks.length} ${tracks.length === 1 ? "Track" : "Tracks"}`}
             </span>
           </div>
+          <div className="flex items-center gap-1 border-b border-line px-4 py-2 md:px-5">
+            <span className="mr-auto font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim/50">
+              Group by
+            </span>
+            {(["artist", "genre"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setGroupBy(mode)}
+                aria-pressed={groupBy === mode}
+                className={clsx(
+                  "px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.2em] transition-colors",
+                  focusRing,
+                  groupBy === mode
+                    ? "bg-acid text-black"
+                    : "text-dim hover:text-ink",
+                )}
+              >
+                {mode === "artist" ? "Artist" : "Genre"}
+              </button>
+            ))}
+          </div>
           <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto">
             {isLibraryLoading
               ? Array.from({ length: 8 }).map((_, idx) => (
@@ -447,74 +488,87 @@ const Player: React.FC<PlayerProps> = ({
                     </div>
                   </div>
                 ))
-              : tracks.map((t, idx) => {
-                  const isCurrent = currentTrack?.id === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => handleSelectTrack(t)}
-                      className={clsx(
-                        "group flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors md:px-5",
-                        focusRing,
-                        isCurrent ? "bg-panel" : "hover:bg-panel/60",
-                      )}
-                      aria-current={isCurrent ? "true" : undefined}
-                    >
-                      <span
-                        className={clsx(
-                          "w-6 shrink-0 font-mono text-[0.65rem]",
-                          isCurrent ? "text-acid" : "text-dim",
-                        )}
-                      >
-                        {isCurrent && isPlaying ? (
-                          <span
-                            className="flex h-3 items-end gap-[2px]"
-                            aria-label="Now playing"
-                          >
-                            {[0, 1, 2].map((i) => (
-                              <span
-                                key={i}
-                                className="w-[3px] animate-music-bar bg-acid"
-                                style={{ animationDelay: `-${i * 0.2}s` }}
-                              />
-                            ))}
-                          </span>
-                        ) : (
-                          pad(idx + 1)
-                        )}
+              : grouped.map((group) => (
+                  <div key={group.label}>
+                    <div className="sticky top-0 z-10 flex items-baseline justify-between gap-2 border-b border-line bg-[#0c0c0b] px-4 py-2 md:px-5">
+                      <span className="truncate font-mono text-[0.65rem] uppercase tracking-[0.25em] text-acid/90">
+                        {group.label}
                       </span>
-                      <img
-                        src={t.coverArt || DEFAULT_COVER}
-                        alt=""
-                        className="h-9 w-9 shrink-0 border border-line object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = DEFAULT_COVER;
-                        }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
+                      <span className="shrink-0 font-mono text-[0.6rem] text-dim/60">
+                        {group.list.length}
+                      </span>
+                    </div>
+                    {group.list.map((t, idx) => {
+                      const isCurrent = currentTrack?.id === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => handleSelectTrack(t)}
                           className={clsx(
-                            "block truncate text-sm font-medium",
-                            isCurrent
-                              ? "text-ink"
-                              : "text-dim group-hover:text-ink",
+                            "group flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors md:px-5",
+                            focusRing,
+                            isCurrent ? "bg-panel" : "hover:bg-panel/60",
                           )}
+                          aria-current={isCurrent ? "true" : undefined}
                         >
-                          {t.title}
-                        </span>
-                        <span className="block truncate font-mono text-[0.65rem] uppercase tracking-[0.15em] text-dim/70">
-                          {t.artist}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-right font-mono text-[0.65rem] text-dim/70">
-                        {t.duration ? formatTime(t.duration) : "—"}
-                        <span className="mt-0.5 block">
-                          {t.playCount ?? 0} plays
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
+                          <span
+                            className={clsx(
+                              "w-6 shrink-0 font-mono text-[0.65rem]",
+                              isCurrent ? "text-acid" : "text-dim",
+                            )}
+                          >
+                            {isCurrent && isPlaying ? (
+                              <span
+                                className="flex h-3 items-end gap-[2px]"
+                                aria-label="Now playing"
+                              >
+                                {[0, 1, 2].map((i) => (
+                                  <span
+                                    key={i}
+                                    className="w-[3px] animate-music-bar bg-acid"
+                                    style={{ animationDelay: `-${i * 0.2}s` }}
+                                  />
+                                ))}
+                              </span>
+                            ) : (
+                              pad(idx + 1)
+                            )}
+                          </span>
+                          <img
+                            src={t.coverArt || DEFAULT_COVER}
+                            alt=""
+                            className="h-9 w-9 shrink-0 border border-line object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = DEFAULT_COVER;
+                            }}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className={clsx(
+                                "block truncate text-sm font-medium",
+                                isCurrent
+                                  ? "text-ink"
+                                  : "text-dim group-hover:text-ink",
+                              )}
+                            >
+                              {t.title}
+                            </span>
+                            <span className="block truncate font-mono text-[0.65rem] uppercase tracking-[0.15em] text-dim/70">
+                              {t.artist}
+                              {t.genre ? ` · ${t.genre}` : ""}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-right font-mono text-[0.65rem] text-dim/70">
+                            {t.duration ? formatTime(t.duration) : "—"}
+                            <span className="mt-0.5 block">
+                              {t.playCount ?? 0} plays
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
             {!isLibraryLoading && tracks.length === 0 && (
               <p
                 className="p-5 font-mono text-xs uppercase tracking-[0.2em] text-dim"

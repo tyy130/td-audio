@@ -25,6 +25,7 @@ export default async function handler(req, res) {
       const payload = req.body || {};
       const title = typeof payload.title === 'string' ? payload.title.trim() : null;
       const artist = typeof payload.artist === 'string' ? payload.artist.trim() : null;
+      const genre = typeof payload.genre === 'string' ? payload.genre.trim() : null;
       const coverArt = typeof payload.coverArt === 'string' ? payload.coverArt.trim() : null;
       const sortOrder = Number.isFinite(Number(payload.sortOrder)) ? Number(payload.sortOrder) : null;
 
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
         SET
           title = COALESCE(${title || null}, title),
           artist = COALESCE(${artist || null}, artist),
+          genre = COALESCE(${genre || null}, genre),
           cover_art = COALESCE(${coverArt || null}, cover_art),
           sort_order = COALESCE(${sortOrder}, sort_order)
         WHERE id = ${id}

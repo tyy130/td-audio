@@ -20,6 +20,7 @@ export async function ensureSchema(sql, options = {}) {
       audio_url TEXT NOT NULL,
       audio_path TEXT DEFAULT NULL,
       cover_art TEXT DEFAULT NULL,
+      genre TEXT DEFAULT NULL,
       waveform_peaks TEXT DEFAULT NULL,
       duration INT DEFAULT 0,
       added_at BIGINT NOT NULL,
@@ -28,6 +29,7 @@ export async function ensureSchema(sql, options = {}) {
   `;
 
   await sql`ALTER TABLE tracks ADD COLUMN IF NOT EXISTS waveform_peaks TEXT DEFAULT NULL`;
+  await sql`ALTER TABLE tracks ADD COLUMN IF NOT EXISTS genre TEXT DEFAULT NULL`;
 
   await sql`CREATE INDEX IF NOT EXISTS idx_tracks_added_at ON tracks(added_at)`;
 
@@ -64,6 +66,7 @@ export function mapTrackRow(row) {
     src: row.audio_url,
     storagePath: row.audio_path ?? undefined,
     coverArt: row.cover_art ?? undefined,
+    genre: row.genre ?? undefined,
     waveformPeaks,
     duration: Number(row.duration ?? 0),
     addedAt: Number(row.added_at ?? 0),

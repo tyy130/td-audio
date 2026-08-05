@@ -116,9 +116,11 @@ const Admin: React.FC<AdminProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const [newTrackTitle, setNewTrackTitle] = useState("");
   const [newTrackArtist, setNewTrackArtist] = useState("");
+  const [newTrackGenre, setNewTrackGenre] = useState("");
   const [editTrackId, setEditTrackId] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editArtist, setEditArtist] = useState("");
+  const [editGenre, setEditGenre] = useState("");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [orderDirty, setOrderDirty] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -223,6 +225,7 @@ const Admin: React.FC<AdminProps> = ({
       id,
       title: newTrackTitle || "Untitled",
       artist: newTrackArtist || "Unknown",
+      genre: newTrackGenre || undefined,
       duration: waveform.duration || 0,
       addedAt: Date.now(),
       coverArt: undefined,
@@ -241,6 +244,7 @@ const Admin: React.FC<AdminProps> = ({
     // Reset form
     setNewTrackTitle("");
     setNewTrackArtist("");
+    setNewTrackGenre("");
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (coverInputRef.current) coverInputRef.current.value = "";
     setIsUploading(false);
@@ -269,6 +273,7 @@ const Admin: React.FC<AdminProps> = ({
     const target = tracks.find((t) => t.id === id);
     setEditTitle(target?.title || "");
     setEditArtist(target?.artist || "");
+    setEditGenre(target?.genre || "");
   };
 
   const handleUpdateTrack = async () => {
@@ -282,6 +287,7 @@ const Admin: React.FC<AdminProps> = ({
       const updated = await updateTrack(editTrackId, {
         title: editTitle,
         artist: editArtist,
+        genre: editGenre,
       });
 
       setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -402,7 +408,7 @@ const Admin: React.FC<AdminProps> = ({
           </div>
 
           <div className="p-5">
-            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
                 <label className={labelStyles}>Title</label>
                 <input
@@ -421,6 +427,16 @@ const Admin: React.FC<AdminProps> = ({
                   onChange={(e) => setNewTrackArtist(e.target.value)}
                   className={inputStyles}
                   placeholder="Artist Name"
+                />
+              </div>
+              <div>
+                <label className={labelStyles}>Genre</label>
+                <input
+                  type="text"
+                  value={newTrackGenre}
+                  onChange={(e) => setNewTrackGenre(e.target.value)}
+                  className={inputStyles}
+                  placeholder="e.g. House, Hip-Hop…"
                 />
               </div>
             </div>
@@ -541,6 +557,16 @@ const Admin: React.FC<AdminProps> = ({
                   placeholder="Artist"
                 />
               </div>
+            </div>
+            <div className="mt-4 md:max-w-sm">
+              <label className={labelStyles}>Genre</label>
+              <input
+                type="text"
+                value={editGenre}
+                onChange={(e) => setEditGenre(e.target.value)}
+                className={inputStyles}
+                placeholder="e.g. House, Hip-Hop…"
+              />
             </div>
             <div className="mt-4">
               <button

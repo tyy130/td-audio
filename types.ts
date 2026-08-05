@@ -5,6 +5,7 @@ export interface Track {
   src: string; // Remote URL
   duration: number;
   coverArt?: string;
+  genre?: string;
   waveformPeaks?: number[];
   addedAt: number;
   storagePath?: string;

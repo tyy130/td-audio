@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       if (!requireAdmin(req, res)) return;
       const payload = req.body;
-      const { id, title, artist, src, storagePath, coverArt, waveformPeaks, duration, addedAt, sortOrder } = payload || {};
+      const { id, title, artist, genre, src, storagePath, coverArt, waveformPeaks, duration, addedAt, sortOrder } = payload || {};
       if (!id || !title || !artist || !src) {
         return res.status(400).json({ message: 'Missing id,title,artist,src' });
       }
@@ -39,13 +39,14 @@ export default async function handler(req, res) {
           : null;
 
       await sql`
-        INSERT INTO tracks (id,title,artist,audio_url,audio_path,cover_art,waveform_peaks,duration,added_at,sort_order)
-        VALUES (${id}, ${title}, ${artist}, ${src}, ${storagePath || null}, ${coverArt || null}, ${serializedWaveformPeaks}, ${Math.round(Number(duration) || 0)}, ${Number(addedAt) || Date.now()}, ${Number(sortOrder) || 0})`;
+        INSERT INTO tracks (id,title,artist,genre,audio_url,audio_path,cover_art,waveform_peaks,duration,added_at,sort_order)
+        VALUES (${id}, ${title}, ${artist}, ${(typeof genre === 'string' && genre.trim()) || null}, ${src}, ${storagePath || null}, ${coverArt || null}, ${serializedWaveformPeaks}, ${Math.round(Number(duration) || 0)}, ${Number(addedAt) || Date.now()}, ${Number(sortOrder) || 0})`;
 
       return res.status(201).json({
         id,
         title,
         artist,
+        genre: (typeof genre === 'string' && genre.trim()) || undefined,
         src,
         storagePath: storagePath || undefined,
         coverArt: coverArt || undefined,

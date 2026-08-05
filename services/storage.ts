@@ -42,6 +42,7 @@ interface TrackInsert {
   id: string;
   title: string;
   artist: string;
+  genre?: string;
   coverArt?: string;
   waveformPeaks?: number[];
   duration?: number;
@@ -91,6 +92,7 @@ export const saveTrack = async (
     ...metadata,
     title: metadata.title,
     artist: metadata.artist,
+    genre: metadata.genre,
     duration: metadata.duration || 0,
     coverArt: coverUrl,
     waveformPeaks: metadata.waveformPeaks,
@@ -125,7 +127,7 @@ export const deleteTrack = async (track: Track): Promise<void> => {
 
 export const updateTrack = async (
   id: string,
-  payload: Partial<Pick<Track, 'title' | 'artist' | 'coverArt' | 'sortOrder'>>
+  payload: Partial<Pick<Track, 'title' | 'artist' | 'genre' | 'coverArt' | 'sortOrder'>>
 ): Promise<Track> => {
   const response = await fetch(buildUrl(`/tracks/${id}`), {
     method: 'PATCH',
