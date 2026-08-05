@@ -40,7 +40,7 @@ export default async function handler(req, res) {
 
       await sql`
         INSERT INTO tracks (id,title,artist,audio_url,audio_path,cover_art,waveform_peaks,duration,added_at,sort_order)
-        VALUES (${id}, ${title}, ${artist}, ${src}, ${storagePath || null}, ${coverArt || null}, ${serializedWaveformPeaks}, ${Number(duration) || 0}, ${Number(addedAt) || Date.now()}, ${Number(sortOrder) || 0})`;
+        VALUES (${id}, ${title}, ${artist}, ${src}, ${storagePath || null}, ${coverArt || null}, ${serializedWaveformPeaks}, ${Math.round(Number(duration) || 0)}, ${Number(addedAt) || Date.now()}, ${Number(sortOrder) || 0})`;
 
       return res.status(201).json({
         id,
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
         storagePath: storagePath || undefined,
         coverArt: coverArt || undefined,
         waveformPeaks: serializedWaveformPeaks ? JSON.parse(serializedWaveformPeaks) : undefined,
-        duration: Number(duration) || 0,
+        duration: Math.round(Number(duration) || 0),
         addedAt: Number(addedAt) || Date.now(),
         sortOrder: Number(sortOrder) || 0,
         playCount: 0,
