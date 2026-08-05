@@ -87,13 +87,20 @@ const Player: React.FC<PlayerProps> = ({
   const [isSubmittingVibe, setIsSubmittingVibe] = useState(false);
   const [playRecordedFor, setPlayRecordedFor] = useState<string | null>(null);
   const [derivedWaveformPeaks, setDerivedWaveformPeaks] = useState<
-    number[] | undefined
+    { trackId: string; peaks?: number[] } | undefined
   >(undefined);
   const queuedTrackToPlayRef = useRef<string | null>(null);
 
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.id === currentTrack.id)
     : -1;
+
+  const displayPeaks =
+    currentTrack?.waveformPeaks?.length
+      ? currentTrack.waveformPeaks
+      : currentTrack && derivedWaveformPeaks?.trackId === currentTrack.id
+        ? derivedWaveformPeaks.peaks
+        : undefined;
 
   const handleVolumeChange = (value: number) => {
     changeVolume(value);
@@ -139,7 +146,10 @@ const Player: React.FC<PlayerProps> = ({
 
     extractWaveformPeaksFromUrl(currentTrack.src).then((analysis) => {
       if (cancelled) return;
-      setDerivedWaveformPeaks(analysis.peaks);
+      setDerivedWaveformPeaks({
+        trackId: currentTrack.id,
+        peaks: analysis.peaks,
+      });
     });
 
     return () => {
@@ -249,7 +259,7 @@ const Player: React.FC<PlayerProps> = ({
   };
 
   return (
-    <div className="flex h-screen max-h-screen flex-col overflow-hidden bg-[#0c0c0b] text-ink">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#0c0c0b] text-ink">
       {/* Header */}
       <header className="flex items-stretch justify-between border-b border-line">
         <div className="flex flex-col gap-0.5 px-4 py-3 md:px-6">
@@ -371,7 +381,7 @@ const Player: React.FC<PlayerProps> = ({
                 <Visualizer
                   isPlaying={isPlaying}
                   waveformData={waveformData}
-                  peaks={currentTrack.waveformPeaks ?? derivedWaveformPeaks}
+                  peaks={displayPeaks}
                   duration={duration}
                   currentTime={currentTime}
                   progress={duration > 0 ? currentTime / duration : 0}
@@ -559,7 +569,7 @@ const Player: React.FC<PlayerProps> = ({
       </main>
 
       {/* Transport */}
-      <footer className="z-20 border-t border-line bg-[#0c0c0b]">
+      <footer className="z-20 border-t border-line bg-[#0c0c0b] pb-[env(safe-area-inset-bottom)]">
         {/* Seek */}
         <div className="flex items-center gap-3 border-b border-line px-4 py-3 md:px-6">
           <span className="w-10 font-mono text-[0.65rem] text-dim">
