@@ -103,6 +103,7 @@ const Player: React.FC<PlayerProps> = ({
     isPlaying,
     togglePlay,
     play,
+    pause,
     duration,
     currentTime,
     seek,
@@ -113,6 +114,7 @@ const Player: React.FC<PlayerProps> = ({
     onAutoAdvance,
     repeatMode === "one",
     volume,
+    currentTrack?.waveformPeaks,
   );
   const [toast, setToast] = useState<string | null>(null);
   const [resonance, setResonance] = useState(3);
@@ -125,6 +127,51 @@ const Player: React.FC<PlayerProps> = ({
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.id === currentTrack.id)
     : -1;
+
+  // Media Session: metadata + hardware/lock-screen controls, so mobile
+  // systems treat this as a media player and keep playback alive when
+  // the browser is backgrounded or the screen locks.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    if (!currentTrack) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      album: currentTrack.album || "SlugHouse Records",
+      artwork: currentTrack.coverArt
+        ? [{ src: currentTrack.coverArt, sizes: "512x512", type: "image/jpeg" }]
+        : [],
+    });
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.setActionHandler("play", () => play());
+    navigator.mediaSession.setActionHandler("pause", () => pause());
+    navigator.mediaSession.setActionHandler("previoustrack", () => onPrev());
+    navigator.mediaSession.setActionHandler("nexttrack", () => onNext());
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      if (details.seekTime != null) seek(details.seekTime);
+    });
+  }, [play, pause, onPrev, onNext, seek]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    if (Number.isFinite(duration) && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration,
+          playbackRate: 1,
+          position: Math.min(currentTime, duration),
+        });
+      } catch {
+        /* position state is best-effort */
+      }
+    }
+  }, [duration, currentTime]);
 
   const handleVolumeChange = (value: number) => {
     changeVolume(value);

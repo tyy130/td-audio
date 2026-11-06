@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, initialVolume = 1) => {
+// Mobile browsers suspend the page's AudioContext when the screen locks or
+// the user leaves the browser. Any <audio> element routed through
+// createMediaElementSource goes silent the moment that happens, so on
+// touch devices the element must play straight to the output and the
+// visualizer runs from the track's stored waveform peaks instead.
+const isTouchDevice = () =>
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+
+export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, initialVolume = 1, peaks?: number[]) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const desiredPlayingRef = useRef(false);
   const onEndedRef = useRef(onEnded);
@@ -9,16 +19,27 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const fallbackTimerRef = useRef<number | null>(null);
+  const peaksRef = useRef<number[] | undefined>(peaks);
+  const graphAllowedRef = useRef<boolean | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(initialVolume);
   const [waveformData, setWaveformData] = useState<number[]>(() => Array.from({ length: 32 }, () => 0.08));
 
+  useEffect(() => {
+    peaksRef.current = peaks;
+  }, [peaks]);
+
   const stopWaveformLoop = useCallback(() => {
     if (animationFrameRef.current != null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
+    }
+    if (fallbackTimerRef.current != null) {
+      window.clearInterval(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
     }
   }, []);
 
@@ -29,7 +50,32 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
 
   const startWaveformLoop = useCallback(() => {
     const analyser = analyserRef.current;
-    if (!analyser) return;
+    if (!analyser) {
+      // No live analyser (touch devices): animate the bars from the
+      // track's stored waveform peaks around the playhead instead.
+      stopWaveformLoop();
+      const bars = 32;
+      fallbackTimerRef.current = window.setInterval(() => {
+        const audio = audioRef.current;
+        const peaksData = peaksRef.current;
+        if (!audio || !peaksData || peaksData.length === 0) return;
+        const progress =
+          Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.currentTime / audio.duration
+            : 0;
+        const center = Math.floor(progress * peaksData.length);
+        const wobble = 0.85 + 0.15 * Math.sin(Date.now() / 280);
+        const nextBars = Array.from({ length: bars }, (_, index) => {
+          const peak =
+            peaksData[
+              Math.min(peaksData.length - 1, Math.max(0, center - 8 + index))
+            ] ?? 0.08;
+          return Math.max(0.08, Math.min(1, peak * wobble));
+        });
+        setWaveformData(nextBars);
+      }, 240);
+      return;
+    }
 
     const buffer = new Uint8Array(analyser.frequencyBinCount);
     const bars = 32;
@@ -62,6 +108,15 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
   const ensureAudioGraph = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return null;
+
+    if (graphAllowedRef.current === null) {
+      graphAllowedRef.current = !isTouchDevice();
+    }
+    if (!graphAllowedRef.current) {
+      // Touch device: never capture the element into Web Audio, so the OS
+      // keeps it playing in the background / on the lock screen.
+      return null;
+    }
 
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext();
@@ -216,6 +271,16 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
   const play = useCallback(() => {
     desiredPlayingRef.current = true;
     if (!audioRef.current || !currentSrcRef.current) return;
+    // Tell iOS this is media playback (not incidental sound) so it keeps
+    // playing through the lock screen and silent-mode switch.
+    try {
+      const nav = navigator as Navigator & {
+        audioSession?: { type: string };
+      };
+      if (nav.audioSession) nav.audioSession.type = 'playback';
+    } catch {
+      /* Audio Session API not available — non-fatal */
+    }
     ensureAudioGraph()?.then(() => audioRef.current?.play()).catch(error => {
       console.error('Playback failed', error);
       desiredPlayingRef.current = false;
