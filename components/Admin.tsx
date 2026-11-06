@@ -15,6 +15,7 @@ import {
   reorderTracks,
   saveTrack,
   updateTrack,
+  uploadTrackCover,
 } from "../services/storage";
 import { extractEmbeddedCoverArt } from "../services/embeddedArt";
 import { reencodeCoverArt } from "../services/coverArt";
@@ -117,12 +118,17 @@ const Admin: React.FC<AdminProps> = ({
   const [newTrackTitle, setNewTrackTitle] = useState("");
   const [newTrackArtist, setNewTrackArtist] = useState("");
   const [newTrackGenre, setNewTrackGenre] = useState("");
+  const [newTrackAlbum, setNewTrackAlbum] = useState("");
   const [editTrackId, setEditTrackId] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editArtist, setEditArtist] = useState("");
   const [editGenre, setEditGenre] = useState("");
+  const [editAlbum, setEditAlbum] = useState("");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [orderDirty, setOrderDirty] = useState(false);
+  const [coverTarget, setCoverTarget] = useState("");
+  const [isApplyingCover, setIsApplyingCover] = useState(false);
+  const albumCoverInputRef = useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -226,6 +232,7 @@ const Admin: React.FC<AdminProps> = ({
       title: newTrackTitle || "Untitled",
       artist: newTrackArtist || "Unknown",
       genre: newTrackGenre || undefined,
+      album: newTrackAlbum || undefined,
       duration: waveform.duration || 0,
       addedAt: Date.now(),
       coverArt: undefined,
@@ -245,6 +252,7 @@ const Admin: React.FC<AdminProps> = ({
     setNewTrackTitle("");
     setNewTrackArtist("");
     setNewTrackGenre("");
+    setNewTrackAlbum("");
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (coverInputRef.current) coverInputRef.current.value = "";
     setIsUploading(false);
@@ -274,6 +282,7 @@ const Admin: React.FC<AdminProps> = ({
     setEditTitle(target?.title || "");
     setEditArtist(target?.artist || "");
     setEditGenre(target?.genre || "");
+    setEditAlbum(target?.album || "");
   };
 
   const handleUpdateTrack = async () => {
@@ -288,6 +297,7 @@ const Admin: React.FC<AdminProps> = ({
         title: editTitle,
         artist: editArtist,
         genre: editGenre,
+        album: editAlbum,
       });
 
       setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -298,6 +308,53 @@ const Admin: React.FC<AdminProps> = ({
       alert("Unable to update track.");
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleApplyAlbumCover = async () => {
+    const file = albumCoverInputRef.current?.files?.[0];
+    const query = coverTarget.trim().toLowerCase();
+    if (!query) {
+      alert("Enter an album or artist name to apply the cover to.");
+      return;
+    }
+    if (!file) {
+      alert("Please select a cover image.");
+      return;
+    }
+
+    const matched = tracks.filter(
+      (t) =>
+        t.album?.trim().toLowerCase() === query ||
+        t.artist.trim().toLowerCase() === query,
+    );
+    if (matched.length === 0) {
+      alert(`No tracks match "${coverTarget}".`);
+      return;
+    }
+
+    setIsApplyingCover(true);
+    try {
+      const processed = (await reencodeCoverArt(file)) ?? file;
+      let applied = 0;
+      for (const track of matched) {
+        const coverUrl = await uploadTrackCover(track.id, processed);
+        const updated = await updateTrack(track.id, { coverArt: coverUrl });
+        setTracks((prev) =>
+          prev.map((t) => (t.id === updated.id ? updated : t)),
+        );
+        onTrackUpdated(updated);
+        applied += 1;
+      }
+      setToastMessage(
+        `Cover applied to ${applied} ${applied === 1 ? "track" : "tracks"}`,
+      );
+      if (albumCoverInputRef.current) albumCoverInputRef.current.value = "";
+    } catch (err) {
+      console.error(err);
+      alert("Unable to apply cover art.");
+    } finally {
+      setIsApplyingCover(false);
     }
   };
 
@@ -408,7 +465,7 @@ const Admin: React.FC<AdminProps> = ({
           </div>
 
           <div className="p-5">
-            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div>
                 <label className={labelStyles}>Title</label>
                 <input
@@ -427,6 +484,16 @@ const Admin: React.FC<AdminProps> = ({
                   onChange={(e) => setNewTrackArtist(e.target.value)}
                   className={inputStyles}
                   placeholder="Artist Name"
+                />
+              </div>
+              <div>
+                <label className={labelStyles}>Album</label>
+                <input
+                  type="text"
+                  value={newTrackAlbum}
+                  onChange={(e) => setNewTrackAlbum(e.target.value)}
+                  className={inputStyles}
+                  placeholder="Album Title"
                 />
               </div>
               <div>
@@ -558,15 +625,27 @@ const Admin: React.FC<AdminProps> = ({
                 />
               </div>
             </div>
-            <div className="mt-4 md:max-w-sm">
-              <label className={labelStyles}>Genre</label>
-              <input
-                type="text"
-                value={editGenre}
-                onChange={(e) => setEditGenre(e.target.value)}
-                className={inputStyles}
-                placeholder="e.g. House, Hip-Hop…"
-              />
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className={labelStyles}>Album</label>
+                <input
+                  type="text"
+                  value={editAlbum}
+                  onChange={(e) => setEditAlbum(e.target.value)}
+                  className={inputStyles}
+                  placeholder="Album Title"
+                />
+              </div>
+              <div>
+                <label className={labelStyles}>Genre</label>
+                <input
+                  type="text"
+                  value={editGenre}
+                  onChange={(e) => setEditGenre(e.target.value)}
+                  className={inputStyles}
+                  placeholder="e.g. House, Hip-Hop…"
+                />
+              </div>
             </div>
             <div className="mt-4">
               <button
@@ -580,11 +659,65 @@ const Admin: React.FC<AdminProps> = ({
           </div>
         </section>
 
+        {/* Album Cover Section */}
+        <section className="mt-6 border border-line">
+          <div className="flex items-center gap-3 border-b border-line bg-panel px-5 py-3">
+            <span className="font-mono text-[0.65rem] text-acid">03</span>
+            <h3 className="flex items-center gap-2 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-ink">
+              <Upload size={13} /> Album Cover
+            </h3>
+          </div>
+
+          <div className="p-5">
+            <div className="mb-4 md:max-w-sm">
+              <label className={labelStyles}>Album or Artist</label>
+              <input
+                type="text"
+                value={coverTarget}
+                onChange={(e) => setCoverTarget(e.target.value)}
+                className={inputStyles}
+                placeholder="e.g. Gravel in My Boots"
+              />
+            </div>
+            <div className="flex flex-col items-stretch gap-4 md:flex-row">
+              <label
+                className={`flex flex-1 cursor-pointer flex-col items-center border border-dashed border-line px-4 py-6 transition-colors hover:border-acid hover:bg-panel ${focusRing}`}
+              >
+                <Upload className="h-7 w-7 text-acid" />
+                <span className="mt-2 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim">
+                  Select Cover Image
+                </span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  ref={albumCoverInputRef}
+                />
+              </label>
+
+              <button
+                onClick={handleApplyAlbumCover}
+                disabled={isApplyingCover}
+                className={`flex w-full items-center justify-center gap-2 bg-acid px-8 py-4 font-mono text-xs uppercase tracking-[0.2em] text-black transition-transform hover:scale-[1.02] disabled:opacity-60 md:w-auto ${focusRing}`}
+              >
+                {isApplyingCover ? (
+                  <span className="h-4 w-4 animate-spin border-2 border-black/30 border-t-black"></span>
+                ) : null}
+                {isApplyingCover ? "Applying…" : "Apply to Album"}
+              </button>
+            </div>
+            <p className="mt-4 font-mono text-[0.6rem] uppercase tracking-[0.15em] text-dim/70">
+              Sets the same cover art on every track in the album — or every
+              track by the artist.
+            </p>
+          </div>
+        </section>
+
         {/* Track List */}
         <section className="mt-6 border border-line">
           <div className="flex items-center justify-between border-b border-line bg-panel px-5 py-3">
             <div className="flex items-center gap-3">
-              <span className="font-mono text-[0.65rem] text-acid">03</span>
+              <span className="font-mono text-[0.65rem] text-acid">04</span>
               <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-ink">
                 Catalog
               </h3>

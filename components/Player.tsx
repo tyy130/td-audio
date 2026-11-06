@@ -18,6 +18,7 @@ import { useAudio } from "../hooks/useAudio";
 import { clsx } from "clsx";
 import { DEFAULT_COVER } from "../constants";
 import { recordPlayback, sendVibe, TrackMetrics } from "../services/storage";
+import { groupByAlbum } from "../services/albums";
 
 interface PlayerProps {
   currentTrack: Track | null;
@@ -46,9 +47,23 @@ const formatTime = (time: number) => {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-type GroupBy = "artist" | "genre";
+type GroupBy = "album" | "artist" | "genre";
 
-const groupTracks = (tracks: Track[], groupBy: GroupBy) => {
+interface TrackGroup {
+  label: string;
+  sublabel?: string;
+  list: Track[];
+}
+
+const groupTracks = (tracks: Track[], groupBy: GroupBy): TrackGroup[] => {
+  if (groupBy === "album") {
+    // Album view is featured-first (newest album leads), not alphabetical.
+    return groupByAlbum(tracks).map((group) => ({
+      label: group.label,
+      sublabel: group.album ? group.artist : undefined,
+      list: group.tracks,
+    }));
+  }
   const groups = new Map<string, Track[]>();
   for (const track of tracks) {
     const label =
@@ -104,7 +119,7 @@ const Player: React.FC<PlayerProps> = ({
   const [isSubmittingVibe, setIsSubmittingVibe] = useState(false);
   const [playRecordedFor, setPlayRecordedFor] = useState<string | null>(null);
   const queuedTrackToPlayRef = useRef<string | null>(null);
-  const [groupBy, setGroupBy] = useState<GroupBy>("artist");
+  const [groupBy, setGroupBy] = useState<GroupBy>("album");
   const grouped = useMemo(() => groupTracks(tracks, groupBy), [tracks, groupBy]);
 
   const currentIndex = currentTrack
@@ -454,7 +469,7 @@ const Player: React.FC<PlayerProps> = ({
             <span className="mr-auto font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim/50">
               Group by
             </span>
-            {(["artist", "genre"] as const).map((mode) => (
+            {(["album", "artist", "genre"] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setGroupBy(mode)}
@@ -467,7 +482,11 @@ const Player: React.FC<PlayerProps> = ({
                     : "text-dim hover:text-ink",
                 )}
               >
-                {mode === "artist" ? "Artist" : "Genre"}
+                {mode === "album"
+                  ? "Album"
+                  : mode === "artist"
+                    ? "Artist"
+                    : "Genre"}
               </button>
             ))}
           </div>
@@ -493,6 +512,12 @@ const Player: React.FC<PlayerProps> = ({
                     <div className="sticky top-0 z-10 flex items-baseline justify-between gap-2 border-b border-line bg-[#0c0c0b] px-4 py-2 md:px-5">
                       <span className="truncate font-mono text-[0.65rem] uppercase tracking-[0.25em] text-acid/90">
                         {group.label}
+                        {group.sublabel ? (
+                          <span className="text-dim/70">
+                            {" "}
+                            · {group.sublabel}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 font-mono text-[0.6rem] text-dim/60">
                         {group.list.length}

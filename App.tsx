@@ -1,6 +1,7 @@
-import React, { useState, useEffect, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { Track, AppView, RepeatMode, PersistentSettings } from "./types";
 import { getAllTracks, TrackMetrics } from "./services/storage";
+import { orderTracksForPlayback } from "./services/albums";
 import Player from "./components/Player";
 
 // Lazy load Admin component - only loads when user clicks settings
@@ -16,6 +17,10 @@ function App() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [volume, setVolume] = useState(1);
 
+  // Playback runs album-first: the featured album (most recently added)
+  // leads the queue, so the newest release is what plays first.
+  const playQueue = useMemo(() => orderTracksForPlayback(tracks), [tracks]);
+
   // Initial Load
   useEffect(() => {
     let hasCachedTracks = false;
@@ -29,7 +34,7 @@ function App() {
           hasCachedTracks = cachedTracks.length > 0;
           setTracks(cachedTracks);
           if (cachedTracks.length > 0) {
-            setCurrentTrack(cachedTracks[0]);
+            setCurrentTrack(orderTracksForPlayback(cachedTracks)[0]);
           }
           setIsLibraryLoading(false);
         }
@@ -43,7 +48,7 @@ function App() {
         const loadedTracks = await getAllTracks();
         setTracks(loadedTracks);
         if (loadedTracks.length > 0) {
-          setCurrentTrack(loadedTracks[0]);
+          setCurrentTrack(orderTracksForPlayback(loadedTracks)[0]);
         }
         localStorage.setItem(TRACK_CACHE_KEY, JSON.stringify(loadedTracks));
       } catch (e) {
@@ -59,18 +64,18 @@ function App() {
 
   useEffect(() => {
     setCurrentTrack((prev) => {
-      if (tracks.length === 0) {
+      if (playQueue.length === 0) {
         return null;
       }
 
       if (!prev) {
-        return tracks[0];
+        return playQueue[0];
       }
 
-      const matchingTrack = tracks.find((track) => track.id === prev.id);
-      return matchingTrack || tracks[0];
+      const matchingTrack = playQueue.find((track) => track.id === prev.id);
+      return matchingTrack || playQueue[0];
     });
-  }, [tracks]);
+  }, [playQueue]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -120,16 +125,16 @@ function App() {
 
     if (currentTrack?.src) {
       preloadTargets.add(currentTrack.src);
-    } else if (tracks[0]?.src) {
-      preloadTargets.add(tracks[0].src);
+    } else if (playQueue[0]?.src) {
+      preloadTargets.add(playQueue[0].src);
     }
 
-    if (currentTrack && tracks.length > 1) {
-      const currentIndex = tracks.findIndex(
+    if (currentTrack && playQueue.length > 1) {
+      const currentIndex = playQueue.findIndex(
         (track) => track.id === currentTrack.id,
       );
       if (currentIndex !== -1) {
-        const nextTrack = tracks[(currentIndex + 1) % tracks.length];
+        const nextTrack = playQueue[(currentIndex + 1) % playQueue.length];
         if (nextTrack?.src && nextTrack.src !== currentTrack.src) {
           preloadTargets.add(nextTrack.src);
         }
@@ -152,66 +157,66 @@ function App() {
         audio.load();
       });
     };
-  }, [currentTrack, tracks]);
+  }, [currentTrack, playQueue]);
 
   // Playback logic wrappers
   const pickRandomTrack = () => {
-    if (tracks.length === 0) return null;
-    if (!currentTrack) return tracks[0];
-    if (tracks.length === 1) return currentTrack;
-    const pool = tracks.filter((t) => t.id !== currentTrack.id);
+    if (playQueue.length === 0) return null;
+    if (!currentTrack) return playQueue[0];
+    if (playQueue.length === 1) return currentTrack;
+    const pool = playQueue.filter((t) => t.id !== currentTrack.id);
     const randomIdx = Math.floor(Math.random() * pool.length);
     return pool[randomIdx] || null;
   };
 
   const handleNext = () => {
-    if (!currentTrack || tracks.length === 0) return;
-    if (isShuffle && tracks.length > 1) {
+    if (!currentTrack || playQueue.length === 0) return;
+    if (isShuffle && playQueue.length > 1) {
       const randomTrack = pickRandomTrack();
       if (randomTrack) setCurrentTrack(randomTrack);
       return;
     }
-    const idx = tracks.findIndex((t) => t.id === currentTrack.id);
+    const idx = playQueue.findIndex((t) => t.id === currentTrack.id);
     if (idx === -1) {
-      setCurrentTrack(tracks[0]);
+      setCurrentTrack(playQueue[0]);
       return;
     }
-    const nextIdx = (idx + 1) % tracks.length;
-    setCurrentTrack(tracks[nextIdx]);
+    const nextIdx = (idx + 1) % playQueue.length;
+    setCurrentTrack(playQueue[nextIdx]);
   };
 
   const handlePrev = () => {
-    if (!currentTrack || tracks.length === 0) return;
-    const idx = tracks.findIndex((t) => t.id === currentTrack.id);
+    if (!currentTrack || playQueue.length === 0) return;
+    const idx = playQueue.findIndex((t) => t.id === currentTrack.id);
     if (idx === -1) {
-      setCurrentTrack(tracks[0]);
+      setCurrentTrack(playQueue[0]);
       return;
     }
-    const prevIdx = idx === 0 ? tracks.length - 1 : idx - 1;
-    setCurrentTrack(tracks[prevIdx]);
+    const prevIdx = idx === 0 ? playQueue.length - 1 : idx - 1;
+    setCurrentTrack(playQueue[prevIdx]);
   };
 
   const handleAutoAdvance = () => {
-    if (!currentTrack || tracks.length === 0) return;
+    if (!currentTrack || playQueue.length === 0) return;
     if (repeatMode === "one") {
       return;
     }
-    if (isShuffle && tracks.length > 1) {
+    if (isShuffle && playQueue.length > 1) {
       const randomTrack = pickRandomTrack();
       if (randomTrack) setCurrentTrack(randomTrack);
       return;
     }
-    const idx = tracks.findIndex((t) => t.id === currentTrack.id);
+    const idx = playQueue.findIndex((t) => t.id === currentTrack.id);
     if (idx === -1) {
-      setCurrentTrack(tracks[0]);
+      setCurrentTrack(playQueue[0]);
       return;
     }
-    const isLastTrack = idx === tracks.length - 1;
+    const isLastTrack = idx === playQueue.length - 1;
     if (isLastTrack && repeatMode === "off") {
       return;
     }
     const nextIdx = isLastTrack ? 0 : idx + 1;
-    setCurrentTrack(tracks[nextIdx]);
+    setCurrentTrack(playQueue[nextIdx]);
   };
 
   const toggleShuffle = () => setIsShuffle((prev) => !prev);
@@ -268,7 +273,7 @@ function App() {
           <>
             <Player
               currentTrack={currentTrack}
-              tracks={tracks}
+              tracks={playQueue}
               onNext={handleNext}
               onPrev={handlePrev}
               onSelect={setCurrentTrack}

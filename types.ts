@@ -6,6 +6,7 @@ export interface Track {
   duration: number;
   coverArt?: string;
   genre?: string;
+  album?: string;
   waveformPeaks?: number[];
   addedAt: number;
   storagePath?: string;

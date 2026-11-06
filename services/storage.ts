@@ -43,6 +43,7 @@ interface TrackInsert {
   title: string;
   artist: string;
   genre?: string;
+  album?: string;
   coverArt?: string;
   waveformPeaks?: number[];
   duration?: number;
@@ -93,6 +94,7 @@ export const saveTrack = async (
     title: metadata.title,
     artist: metadata.artist,
     genre: metadata.genre,
+    album: metadata.album,
     duration: metadata.duration || 0,
     coverArt: coverUrl,
     waveformPeaks: metadata.waveformPeaks,
@@ -112,6 +114,19 @@ export const saveTrack = async (
   return handled.json();
 };
 
+export const uploadTrackCover = async (
+  trackId: string,
+  file: File,
+): Promise<string> => {
+  const blob = await upload(`${trackId}-cover.jpg`, file, {
+    access: 'public',
+    contentType: file.type || 'image/jpeg',
+    handleUploadUrl: buildUrl('/uploads/blob'),
+    multipart: false,
+  });
+  return blob.url;
+};
+
 export const getAllTracks = async (): Promise<Track[]> => {
   const response = await fetch(buildUrl('/tracks'));
   const handled = await handleResponse(response);
@@ -127,7 +142,7 @@ export const deleteTrack = async (track: Track): Promise<void> => {
 
 export const updateTrack = async (
   id: string,
-  payload: Partial<Pick<Track, 'title' | 'artist' | 'genre' | 'coverArt' | 'sortOrder'>>
+  payload: Partial<Pick<Track, 'title' | 'artist' | 'genre' | 'album' | 'coverArt' | 'sortOrder'>>
 ): Promise<Track> => {
   const response = await fetch(buildUrl(`/tracks/${id}`), {
     method: 'PATCH',
