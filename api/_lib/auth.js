@@ -77,13 +77,17 @@ function serializeCookie(name, value, options = {}) {
   return parts.join('; ');
 }
 
+export function getRequestOrigin(req) {
+  const proto = req.headers['x-forwarded-proto'] || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return host ? `${proto}://${host}` : null;
+}
+
 export function getBaseUrl(req) {
   if (process.env.APP_BASE_URL) {
     return process.env.APP_BASE_URL.trim().replace(/\/$/, '');
   }
-  const proto = req.headers['x-forwarded-proto'] || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  return `${proto}://${host}`;
+  return getRequestOrigin(req);
 }
 
 export function getAllowedEmail() {
