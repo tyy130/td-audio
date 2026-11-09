@@ -1,1 +1,0 @@
-nomos write-path probe — deleted immediately after the test
