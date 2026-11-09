@@ -1,0 +1,64 @@
+# Gauntlet — pre-review checks on every pull request.
+# Clears routine findings (types, build, secrets, dependency risk, oversized
+# changes) BEFORE a human opens the diff, and posts one summary to read.
+# Install: copy to .github/workflows/gauntlet.yml in a JS/TS repo.
+name: Gauntlet
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        if: hashFiles('tsconfig.json') != ''
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Dependency audit (report only)
+        continue-on-error: true
+        run: |
+          echo "### Dependency audit" >> "$GITHUB_STEP_SUMMARY"
+          npm audit --audit-level=moderate 2>&1 | tail -12 >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Change size
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length')
+          ADDS=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions')
+          DELS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions')
+          echo "### Change size" >> "$GITHUB_STEP_SUMMARY"
+          echo "$FILES files, +$ADDS / -$DELS lines" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$FILES" -gt 25 ]; then
+            echo "> ⚠️ Over 25 files — consider splitting into stacked PRs so review stays focused." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
