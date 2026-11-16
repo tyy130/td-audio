@@ -42,13 +42,13 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
         frequencyBufferRef.current = buffer;
       }
       analyser.getByteFrequencyData(buffer);
-      // Log-spaced bands from 40 Hz to 16 kHz, like hearing (and like a
+      // Log-spaced bands from 40 Hz to 12 kHz, like hearing (and like a
       // studio meter). Even spacing piles all the music into the first few
       // bars and leaves the right side flat.
       const nyquist = (audioContextRef.current?.sampleRate ?? 44100) / 2;
       const binHz = nyquist / buffer.length;
       const lowHz = 40;
-      const highHz = Math.min(16000, nyquist);
+      const highHz = Math.min(12000, nyquist);
       for (let index = 0; index < bars; index += 1) {
         const f0 = lowHz * Math.pow(highHz / lowHz, index / bars);
         const f1 = lowHz * Math.pow(highHz / lowHz, (index + 1) / bars);
@@ -59,7 +59,7 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
           if (buffer[cursor] > peak) peak = buffer[cursor];
         }
         // Music has less energy up top; tilt so the highs still read.
-        const tilt = 0.85 + 0.45 * (index / (bars - 1));
+        const tilt = 0.85 + 0.9 * (index / (bars - 1));
         out[index] = Math.max(0.06, Math.min(1, (peak / 255) * tilt));
       }
       return;

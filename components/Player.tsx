@@ -447,7 +447,7 @@ const Player: React.FC<PlayerProps> = ({
                 </span>
               </div>
 
-              <div className="mt-6 text-center sm:mt-8 sm:text-left md:mt-5 lg:mt-6 [@media(max-height:800px)]:md:mt-4">
+              <div className="mt-6 text-center sm:mt-8 md:mt-5 lg:mt-6 [@media(max-height:800px)]:md:mt-4">
                 <h1 className="break-words font-display text-[clamp(1.6rem,6vw,3rem)] uppercase leading-[0.95] tracking-tight md:text-[clamp(1.5rem,2.8vw,3rem)]">
                   {currentTrack.title}
                 </h1>
@@ -515,7 +515,7 @@ const Player: React.FC<PlayerProps> = ({
                   ))}
                 </div>
               </div>
-              <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim sm:text-left [@media(max-height:820px)]:hidden">
+              <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim [@media(max-height:820px)]:hidden">
                 Tap a number to rate this track
               </p>
             </div>
@@ -607,8 +607,12 @@ const Player: React.FC<PlayerProps> = ({
           </button>
         )}
 
+        {/* Same columns as the panes above: playback controls sit under the
+            track info, volume and links under the catalog. */}
+        <div className="md:grid md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_460px]">
+          <div className="mx-auto w-full max-w-2xl">
         {/* Seek */}
-        <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 pt-3 md:px-6">
+        <div className="flex w-full items-center gap-3 px-4 pt-3 md:px-6">
           <span className="w-10 font-mono text-[0.7rem] tabular-nums text-dim">
             {formatTime(currentTime)}
           </span>
@@ -633,7 +637,7 @@ const Player: React.FC<PlayerProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="mx-auto grid w-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center px-2 pb-2 pt-1 sm:px-4 md:px-6">
+        <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center px-2 pb-2 pt-1 sm:px-4 md:px-6">
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -715,7 +719,7 @@ const Player: React.FC<PlayerProps> = ({
               <Share2 size={18} />
             </button>
             {/* Phones use their hardware volume buttons */}
-            <div className="hidden items-center gap-1 sm:flex">
+            <div className="hidden items-center gap-1 sm:flex md:hidden">
               <button
                 type="button"
                 onClick={toggleMute}
@@ -742,27 +746,51 @@ const Player: React.FC<PlayerProps> = ({
           </div>
         </div>
 
-        {/* Links strip, tablet and up */}
-        <div className="hidden items-center justify-center gap-x-6 border-t border-line px-4 py-2 md:flex [@media(max-height:500px)]:!hidden">
-          <a
-            href="https://slughouse.com/merch"
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-acid"
-          >
-            Merch ↗
-          </a>
-          <a
-            href="https://slughouse.com"
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-acid"
-          >
-            slughouse.com ↗
-          </a>
-          <span className="hidden font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim/60 lg:inline">
-            Space play · ← → seek · Shift skip
-          </span>
+          </div>
+          <div className="hidden flex-col items-center justify-center gap-2 border-l border-line px-5 md:flex">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleMute}
+                className={clsx(iconButton, "text-dim hover:text-ink")}
+                aria-label={volume === 0 ? "Unmute" : "Mute"}
+                title={volume === 0 ? "Unmute (M)" : "Mute (M)"}
+              >
+                {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                className="h-6 w-28 lg:w-36"
+                style={{
+                  ["--range-bg" as string]: `linear-gradient(to right, #e8e6e1 ${volume * 100}%, #2a2a28 ${volume * 100}%)`,
+                }}
+                aria-label="Volume"
+              />
+            </div>
+            <div className="flex items-center gap-5 [@media(max-height:500px)]:hidden">
+              <a
+                href="https://slughouse.com/merch"
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-acid"
+              >
+                Merch ↗
+              </a>
+              <a
+                href="https://slughouse.com"
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-acid"
+              >
+                slughouse.com ↗
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
 
