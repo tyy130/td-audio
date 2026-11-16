@@ -390,7 +390,7 @@ const Player: React.FC<PlayerProps> = ({
               key={currentTrack.id}
               className="m-auto w-full max-w-md animate-fade-up motion-reduce:animate-none lg:max-w-lg"
             >
-              <div className="relative mx-auto aspect-square w-44 border border-line bg-panel p-3 sm:w-60 sm:p-4 md:w-[min(15rem,30vh)] lg:w-[min(18rem,28vh)] xl:w-[min(20rem,30vh)] [@media(max-height:500px)]:w-32">
+              <div className="relative mx-auto aspect-square w-44 border border-line bg-panel p-3 sm:w-60 sm:p-4 md:w-[min(15rem,30vh)] lg:w-[min(18rem,23vh)] xl:w-[min(20rem,26vh)] [@media(max-height:500px)]:w-32">
                 {/* Vinyl record */}
                 <div
                   className="relative h-full w-full animate-[spin_4s_linear_infinite] motion-reduce:animate-none"
@@ -440,8 +440,8 @@ const Player: React.FC<PlayerProps> = ({
                 </span>
               </div>
 
-              <div className="mt-6 text-center sm:mt-8 sm:text-left md:mt-5 lg:mt-6">
-                <h1 className="break-words font-display text-[clamp(1.6rem,6vw,3rem)] uppercase leading-[0.95] tracking-tight md:text-[clamp(1.6rem,3.5vw,3rem)]">
+              <div className="mt-6 text-center sm:mt-8 sm:text-left md:mt-5 lg:mt-6 [@media(max-height:800px)]:md:mt-4">
+                <h1 className="break-words font-display text-[clamp(1.6rem,6vw,3rem)] uppercase leading-[0.95] tracking-tight md:text-[clamp(1.5rem,2.8vw,3rem)]">
                   {currentTrack.title}
                 </h1>
                 <p className="mt-2 font-mono text-xs uppercase tracking-[0.3em] text-dim">
@@ -452,18 +452,17 @@ const Player: React.FC<PlayerProps> = ({
                 </p>
               </div>
 
-              <div className="mt-6 sm:mt-8 md:mt-5 lg:mt-6">
+              <div className="mt-6 sm:mt-8 md:mt-5 lg:mt-6 [@media(max-height:800px)]:md:mt-4">
                 <Visualizer
                   isPlaying={isPlaying}
-                  progress={progress}
                   readLevels={readLevels}
                 />
               </div>
 
               {/* Stats + rating */}
-              <div className="mt-6 border border-line sm:mt-8 md:mt-5 lg:mt-6">
+              <div className="mt-6 border border-line sm:mt-8 md:mt-5 lg:mt-6 [@media(max-height:800px)]:md:mt-4">
                 <div className="grid grid-cols-2 gap-px bg-line">
-                  <div className="bg-surface px-4 py-3">
+                  <div className="bg-surface px-4 py-3 [@media(max-height:800px)]:py-2">
                     <div className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
                       Plays
                     </div>
@@ -471,7 +470,7 @@ const Player: React.FC<PlayerProps> = ({
                       {currentTrack.playCount ?? 0}
                     </div>
                   </div>
-                  <div className="bg-surface px-4 py-3">
+                  <div className="bg-surface px-4 py-3 [@media(max-height:800px)]:py-2">
                     <div className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
                       Resonance
                     </div>
@@ -510,7 +509,7 @@ const Player: React.FC<PlayerProps> = ({
                   ))}
                 </div>
               </div>
-              <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim sm:text-left">
+              <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim sm:text-left [@media(max-height:820px)]:hidden">
                 Tap a number to rate this track
               </p>
             </div>
@@ -603,7 +602,7 @@ const Player: React.FC<PlayerProps> = ({
         )}
 
         {/* Seek */}
-        <div className="flex items-center gap-3 px-4 pt-3 md:px-6">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 pt-3 md:px-6">
           <span className="w-10 font-mono text-[0.7rem] tabular-nums text-dim">
             {formatTime(currentTime)}
           </span>
@@ -628,7 +627,7 @@ const Player: React.FC<PlayerProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center px-2 pb-2 pt-1 sm:px-4 md:px-6">
+        <div className="mx-auto grid w-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center px-2 pb-2 pt-1 sm:px-4 md:px-6">
           <div className="flex items-center gap-1">
             <button
               type="button"

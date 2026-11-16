@@ -42,13 +42,25 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
         frequencyBufferRef.current = buffer;
       }
       analyser.getByteFrequencyData(buffer);
+      // Log-spaced bands from 40 Hz to 16 kHz, like hearing (and like a
+      // studio meter). Even spacing piles all the music into the first few
+      // bars and leaves the right side flat.
+      const nyquist = (audioContextRef.current?.sampleRate ?? 44100) / 2;
+      const binHz = nyquist / buffer.length;
+      const lowHz = 40;
+      const highHz = Math.min(16000, nyquist);
       for (let index = 0; index < bars; index += 1) {
-        const start = Math.floor((index * buffer.length) / bars);
-        const end = Math.floor(((index + 1) * buffer.length) / bars);
-        let total = 0;
-        for (let cursor = start; cursor < end; cursor += 1) total += buffer[cursor];
-        const count = end - start;
-        out[index] = Math.max(0.08, count > 0 ? total / count / 255 : 0);
+        const f0 = lowHz * Math.pow(highHz / lowHz, index / bars);
+        const f1 = lowHz * Math.pow(highHz / lowHz, (index + 1) / bars);
+        const start = Math.min(buffer.length - 1, Math.floor(f0 / binHz));
+        const end = Math.min(buffer.length, Math.max(start + 1, Math.ceil(f1 / binHz)));
+        let peak = 0;
+        for (let cursor = start; cursor < end; cursor += 1) {
+          if (buffer[cursor] > peak) peak = buffer[cursor];
+        }
+        // Music has less energy up top; tilt so the highs still read.
+        const tilt = 0.85 + 0.45 * (index / (bars - 1));
+        out[index] = Math.max(0.06, Math.min(1, (peak / 255) * tilt));
       }
       return;
     }
@@ -94,8 +106,10 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     if (!sourceNodeRef.current) {
       sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audio);
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 128;
-      analyserRef.current.smoothingTimeConstant = 0.82;
+      analyserRef.current.fftSize = 2048;
+      analyserRef.current.smoothingTimeConstant = 0.78;
+      analyserRef.current.minDecibels = -90;
+      analyserRef.current.maxDecibels = -20;
       sourceNodeRef.current.connect(analyserRef.current);
       analyserRef.current.connect(audioContextRef.current.destination);
     }

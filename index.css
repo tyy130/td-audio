@@ -43,7 +43,7 @@ input[type="range"] {
 }
 input[type="range"]::-webkit-slider-runnable-track {
   height: 2px;
-  background: var(--range-bg, #2a2a28);
+  background: var(--range-bg, #3a3a37);
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -60,7 +60,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 }
 input[type="range"]::-moz-range-track {
   height: 2px;
-  background: var(--range-bg, #2a2a28);
+  background: var(--range-bg, #3a3a37);
 }
 input[type="range"]::-moz-range-thumb {
   height: 12px;
@@ -87,4 +87,26 @@ input[type="range"]::-moz-range-thumb {
     height: 20px;
     width: 20px;
   }
+}
+
+/* Dark, thin scrollbars everywhere (the OS default is a bright white bar) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a28 transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a28;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #8a8a85;
+}
+*::-webkit-scrollbar-button {
+  display: none;
 }

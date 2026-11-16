@@ -5,7 +5,6 @@ const IDLE_LEVEL = 0.08;
 
 interface VisualizerProps {
   isPlaying: boolean;
-  progress: number;
   /** Fills the array with bar levels (0..1). Supplied by useAudio. */
   readLevels: (out: number[]) => void;
 }
@@ -17,7 +16,6 @@ interface VisualizerProps {
  */
 const Visualizer: React.FC<VisualizerProps> = ({
   isPlaying,
-  progress,
   readLevels,
 }) => {
   const barsRef = useRef<Array<HTMLDivElement | null>>([]);
@@ -55,8 +53,6 @@ const Visualizer: React.FC<VisualizerProps> = ({
     return () => cancelAnimationFrame(frame);
   }, [isPlaying, readLevels]);
 
-  const activeBars = Math.floor(progress * BAR_COUNT);
-
   return (
     <div
       className="flex h-10 w-full items-end gap-[2px] sm:h-14 md:h-10 xl:h-14"
@@ -68,9 +64,9 @@ const Visualizer: React.FC<VisualizerProps> = ({
           ref={(el) => {
             barsRef.current[i] = el;
           }}
-          className={`h-full flex-1 origin-bottom transition-transform duration-100 ease-out ${
-            progress > 0 && i <= activeBars ? "bg-acid" : "bg-dim/40"
-          } ${isPlaying ? "opacity-90" : "opacity-40"}`}
+          className={`h-full flex-1 origin-bottom transition-[transform,background-color] duration-100 ease-out ${
+            isPlaying ? "bg-acid" : "bg-dim/40"
+          }`}
           style={{ transform: `scaleY(${IDLE_LEVEL})` }}
         />
       ))}
