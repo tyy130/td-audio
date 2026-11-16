@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Archivo", sans-serif;
+  background: #0c0c0b;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #c3f53c;
+  color: #0c0c0b;
+}
+
+/* Film grain */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Sharp range inputs */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--range-bg, #3a3a37);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  height: 12px;
+  width: 12px;
+  background: #e8e6e1;
+  border: none;
+}
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  background: #c3f53c;
+}
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--range-bg, #3a3a37);
+}
+input[type="range"]::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  background: #e8e6e1;
+  border: none;
+  border-radius: 0;
+}
+
+/* Bigger seek/volume targets for fingers */
+@media (pointer: coarse) {
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    margin-top: -8px;
+    height: 20px;
+    width: 20px;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+  }
+}
+
+/* Dark, thin scrollbars everywhere (the OS default is a bright white bar) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a28 transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a28;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #8a8a85;
+}
+*::-webkit-scrollbar-button {
+  display: none;
+}

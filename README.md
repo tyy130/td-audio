@@ -1,85 +1,67 @@
 # Slughouse Listen
 
-Modern Slughouse media player for `listen.slughouse.com`.
+The private Slughouse Records listening room at [listen.slughouse.com](https://listen.slughouse.com).
 
-This repo is now set up for a Vercel deployment model: React 19 + Vite frontend, Vercel serverless API routes, Neon Postgres, and Vercel Blob-compatible uploads. It also includes your local source media under [`music/SUNO Downloads`](./music/SUNO%20Downloads).
+React 19 + Vite on the front, Vercel Functions in `api/`, Neon Postgres for the catalog and play stats, and Vercel Blob for audio and cover art.
 
-## Why This Base
+## What's where
 
-- `td-audio` is the newest player repo and has the most mature product surface.
-- `audio-player-master` contains older but useful Hostinger/shared-host deployment scripts.
-- `slughouse-media-player` appears to be an earlier player that targeted `playback.slughouse.com`.
+| Path | What it does |
+| --- | --- |
+| `App.tsx` | Library loading, playback queue, shuffle/repeat, saved settings |
+| `components/Player.tsx` | Listening room: now playing, transport, keyboard shortcuts, Media Session |
+| `components/Catalog.tsx` | Track list grouped by album, artist or genre |
+| `components/Visualizer.tsx` | Level bars (own animation loop, no React re-renders) |
+| `components/Admin.tsx` | The Vault: upload, edit, album covers, reorder, delete (lazy-loaded) |
+| `hooks/useAudio.ts` | The audio element, Web Audio analyser, and the touch-device fallback |
+| `services/storage.ts` | Read-side API calls (tracks, plays, ratings) |
+| `services/uploads.ts` | Blob uploads, admin only so listeners never download it |
+| `api/` | Vercel Functions: tracks CRUD, plays, ratings, auth, blob upload tokens |
+| `scripts/migrate-covers.mjs` | One-off cover art migration |
 
-## Local Development
+## Local development
 
 ```bash
 npm install
-npm run dev
+npx vercel dev     # app + API on http://localhost:3000
 ```
 
-For API routes during development:
+`npm run dev` runs the frontend alone (no API). `vercel env pull .env.local` fills in most values, but sensitive ones come back as empty strings, so set those by hand.
+
+Checks (the same ones CI runs on pull requests):
 
 ```bash
-npx vercel dev
+npx tsc --noEmit
+npm run build
 ```
 
-## Required Environment
+## Environment
 
-Copy [`.env.example`](./.env.example) to `.env.local` for local work:
+See [`.env.example`](./.env.example). All backend values live in the Vercel project.
 
-```bash
-VITE_API_BASE_URL=http://localhost:3000/api
-```
+## Deploys
 
-Backend values are expected in the Vercel project:
+Vercel's Git integration deploys `main` to production. Every other branch gets a preview URL. The Gauntlet workflow in `.github/workflows/gauntlet.yml` typechecks, builds and scans for secrets on each pull request.
 
-```bash
-DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
-APP_BASE_URL=https://listen.slughouse.com
-SESSION_SECRET=replace-with-a-long-random-string
-AUTHORIZED_ADMIN_EMAIL=1forfunnn@gmail.com
-VERCEL_APP_CLIENT_ID=your-vercel-app-client-id
-VERCEL_APP_CLIENT_SECRET=your-vercel-app-client-secret
-S3_BUCKET=your-bucket
-S3_REGION=auto
-S3_ENDPOINT=https://xxx.r2.cloudflarestorage.com
-S3_ACCESS_KEY_ID=xxx
-S3_SECRET_ACCESS_KEY=xxx
-```
+## Admin
 
-## Vercel Setup
+Open the Vault from the gear icon (or `?admin=1`). Sign-in is Sign in with Vercel, and only one address is accepted, checked server-side: `AUTHORIZED_ADMIN_EMAIL`, or the owner address hardcoded in `api/_lib/auth.js` when that isn't set. Writes and blob uploads are authorized by the signed session cookie.
 
-1. Import this repo into Vercel.
-2. Set the framework to `Vite` if Vercel does not auto-detect it.
-3. Create a Vercel app for Sign in with Vercel.
-4. Add `https://listen.slughouse.com/api/auth/callback` as an authorization callback URL in that Vercel app.
-5. Add the environment variables from [`.env.example`](./.env.example).
-6. Run the SQL in [`schema.sql`](./schema.sql) against Neon before first use.
-7. Add the custom domain `listen.slughouse.com` in the Vercel project settings.
+## Keyboard shortcuts
 
-The repository now uses CI only in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml). Deployment should come from Vercel's Git integration instead of GitHub Actions SSH scripts.
+| Key | Action |
+| --- | --- |
+| Space or K | Play / pause |
+| ← / → | Seek 5 seconds |
+| Shift + ← / → | Previous / next track |
+| M | Mute |
 
-## Admin Auth
+## API
 
-Admin access is protected by Sign in with Vercel and only the exact email below is accepted server-side:
-
-- `1forfunnn@gmail.com`
-
-Write operations and blob uploads are authorized from the signed admin session cookie. There is no client-side admin password and no client-exposed admin token anymore.
-
-## API Notes
-
-The Vercel functions now include:
-
-- `GET /api/tracks`
-- `POST /api/tracks`
-- `PATCH /api/tracks/:id`
-- `DELETE /api/tracks/:id`
+- `GET /api/tracks`, `POST /api/tracks`
+- `GET|PATCH|DELETE /api/tracks/:id` (PATCH with an empty `album` or `genre` clears it)
 - `POST /api/tracks/reorder`
 - `POST /api/tracks/:id/play`
 - `POST /api/tracks/:id/vibe`
-- `PUT /api/uploads/blob`
-
-## Content Notes
-
-The checked-in `music/` files are source assets for curation. The current app’s admin flow uploads tracks into blob/object storage rather than serving the local `music/` directory directly.
+- `POST /api/uploads/blob`
+- `GET /api/auth/authorize`, `/api/auth/callback`, `/api/auth/me`, `POST /api/auth/signout`
