@@ -60,7 +60,8 @@ const ownsKey = (target: EventTarget | null, key: string) => {
     return (el as HTMLInputElement).type !== "range" || key.startsWith("arrow");
   }
   // Buttons and links activate on Space/Enter.
-  if (tag === "BUTTON" || tag === "A") return key === " " || key === "enter";
+  if (tag === "BUTTON") return key === " " || key === "enter";
+  if (tag === "A") return key === "enter";
   return false;
 };
 
@@ -207,8 +208,8 @@ const Player: React.FC<PlayerProps> = ({
 
   // Keyboard: Space/K play-pause, ←/→ seek, Shift+←/→ prev/next, M mute.
   // Read live values through a ref so the listener is attached once.
-  const keyStateRef = useRef({ togglePlay, onNext, handlePrevClick, seek, duration, currentTime, toggleMute });
-  keyStateRef.current = { togglePlay, onNext, handlePrevClick, seek, duration, currentTime, toggleMute };
+  const keyStateRef = useRef({ togglePlay, onNext, onPrev, seek, duration, currentTime, toggleMute });
+  keyStateRef.current = { togglePlay, onNext, onPrev, seek, duration, currentTime, toggleMute };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -223,7 +224,7 @@ const Player: React.FC<PlayerProps> = ({
         else k.seek(Math.min(k.duration || 0, k.currentTime + SEEK_STEP));
       } else if (key === "arrowleft") {
         e.preventDefault();
-        if (e.shiftKey) k.handlePrevClick();
+        if (e.shiftKey) k.onPrev();
         else k.seek(Math.max(0, k.currentTime - SEEK_STEP));
       } else if (key === "m") {
         k.toggleMute();
@@ -290,6 +291,12 @@ const Player: React.FC<PlayerProps> = ({
   }, [currentTrack?.id, currentTrack?.vibeAverage]);
 
   const currentTrackId = currentTrack?.id;
+  // A new track (or coming back to an earlier one) is a new play to count.
+  // Runs before the effect below in the same commit.
+  useEffect(() => {
+    recordedForRef.current = null;
+  }, [currentTrackId]);
+
   useEffect(() => {
     if (!currentTrackId || !isPlaying) return;
     if (recordedForRef.current === currentTrackId) return;
@@ -484,15 +491,14 @@ const Player: React.FC<PlayerProps> = ({
                 </div>
                 <div
                   className="flex gap-px border-t border-line bg-line"
-                  role="radiogroup"
+                  role="group"
                   aria-label="Rate this track from 1 to 5"
                 >
                   {[1, 2, 3, 4, 5].map((level) => (
                     <button
                       key={level}
                       type="button"
-                      role="radio"
-                      aria-checked={resonance === level}
+                      aria-pressed={resonance === level}
                       onClick={() => submitVibe(level)}
                       disabled={isSubmittingVibe}
                       className={clsx(

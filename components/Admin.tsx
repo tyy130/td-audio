@@ -111,10 +111,10 @@ const TrackItem: React.FC<TrackItemProps> = ({ track, onDelete, onEdit }) => {
 
   // Drop back out of the confirm state if they don't follow through.
   useEffect(() => {
-    if (!confirming) return;
+    if (!confirming || deleting) return;
     const id = window.setTimeout(() => setConfirming(false), 4000);
     return () => window.clearTimeout(id);
-  }, [confirming]);
+  }, [confirming, deleting]);
 
   const confirmDelete = async () => {
     setDeleting(true);
