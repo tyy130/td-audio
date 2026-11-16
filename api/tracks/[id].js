@@ -25,8 +25,12 @@ export default async function handler(req, res) {
       const payload = req.body || {};
       const title = typeof payload.title === 'string' ? payload.title.trim() : null;
       const artist = typeof payload.artist === 'string' ? payload.artist.trim() : null;
-      const genre = typeof payload.genre === 'string' ? payload.genre.trim() : null;
-      const album = typeof payload.album === 'string' ? payload.album.trim() : null;
+      // Genre and album are optional: sending an empty string clears them.
+      // Leaving the key out keeps the current value.
+      const hasGenre = typeof payload.genre === 'string';
+      const hasAlbum = typeof payload.album === 'string';
+      const genre = hasGenre ? payload.genre.trim() || null : null;
+      const album = hasAlbum ? payload.album.trim() || null : null;
       const coverArt = typeof payload.coverArt === 'string' ? payload.coverArt.trim() : null;
       const sortOrder = Number.isFinite(Number(payload.sortOrder)) ? Number(payload.sortOrder) : null;
 
@@ -35,8 +39,8 @@ export default async function handler(req, res) {
         SET
           title = COALESCE(${title || null}, title),
           artist = COALESCE(${artist || null}, artist),
-          genre = COALESCE(${genre || null}, genre),
-          album = COALESCE(${album || null}, album),
+          genre = CASE WHEN ${hasGenre}::boolean THEN ${genre}::text ELSE genre END,
+          album = CASE WHEN ${hasAlbum}::boolean THEN ${album}::text ELSE album END,
           cover_art = COALESCE(${coverArt || null}, cover_art),
           sort_order = COALESCE(${sortOrder}, sort_order)
         WHERE id = ${id}
