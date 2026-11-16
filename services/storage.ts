@@ -1,19 +1,8 @@
-import { upload } from '@vercel/blob/client';
 import { Track } from '../types';
 
-const resolveDefaultApi = () => {
-  if (typeof window === 'undefined') return '';
-  const { hostname } = window.location;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:4000';
-  }
-  // Default for production when deployed under listen.slughouse.com
-  return '/api';
-};
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApi()).replace(/\/$/, '');
-
-const handleResponse = async (response: Response) => {
+export const handleResponse = async (response: Response) => {
   if (response.ok) {
     return response;
   }
@@ -31,14 +20,14 @@ const handleResponse = async (response: Response) => {
   throw new Error(message);
 };
 
-const buildUrl = (path: string) => {
+export const buildUrl = (path: string) => {
   if (!API_BASE_URL) {
     return path;
   }
   return `${API_BASE_URL}${path}`;
 };
 
-interface TrackInsert {
+export interface TrackInsert {
   id: string;
   title: string;
   artist: string;
@@ -58,74 +47,6 @@ export interface TrackMetrics {
   vibeAverage: number;
   lastPlayedAt?: number;
 }
-
-export const saveTrack = async (
-  metadata: TrackInsert,
-  file: File,
-  coverFile?: File,
-): Promise<Track> => {
-  const filename = `${metadata.id}-${file.name}`;
-
-  const blob = await upload(filename, file, {
-    access: 'public',
-    contentType: file.type || 'audio/mpeg',
-    handleUploadUrl: buildUrl('/uploads/blob'),
-    multipart: true,
-  });
-  const publicUrl = blob.url;
-
-  let coverUrl = metadata.coverArt;
-  if (coverFile) {
-    try {
-      const coverBlob = await upload(`${metadata.id}-cover.jpg`, coverFile, {
-        access: 'public',
-        contentType: coverFile.type || 'image/jpeg',
-        handleUploadUrl: buildUrl('/uploads/blob'),
-        multipart: false,
-      });
-      coverUrl = coverBlob.url;
-    } catch (error) {
-      console.warn('Unable to upload cover art', error);
-    }
-  }
-
-  const finalMetadata = {
-    ...metadata,
-    title: metadata.title,
-    artist: metadata.artist,
-    genre: metadata.genre,
-    album: metadata.album,
-    duration: metadata.duration || 0,
-    coverArt: coverUrl,
-    waveformPeaks: metadata.waveformPeaks,
-    src: publicUrl,
-    storagePath: blob.pathname || filename
-  };
-
-  const response = await fetch(buildUrl('/tracks'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(finalMetadata),
-  });
-
-  const handled = await handleResponse(response);
-  return handled.json();
-};
-
-export const uploadTrackCover = async (
-  trackId: string,
-  file: File,
-): Promise<string> => {
-  const blob = await upload(`${trackId}-cover.jpg`, file, {
-    access: 'public',
-    contentType: file.type || 'image/jpeg',
-    handleUploadUrl: buildUrl('/uploads/blob'),
-    multipart: false,
-  });
-  return blob.url;
-};
 
 export const getAllTracks = async (): Promise<Track[]> => {
   const response = await fetch(buildUrl('/tracks'));

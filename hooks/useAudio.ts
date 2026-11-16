@@ -18,92 +18,61 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const fallbackTimerRef = useRef<number | null>(null);
   const peaksRef = useRef<number[] | undefined>(peaks);
   const graphAllowedRef = useRef<boolean | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(initialVolume);
-  const [waveformData, setWaveformData] = useState<number[]>(() => Array.from({ length: 32 }, () => 0.08));
 
   useEffect(() => {
     peaksRef.current = peaks;
   }, [peaks]);
 
-  const stopWaveformLoop = useCallback(() => {
-    if (animationFrameRef.current != null) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    if (fallbackTimerRef.current != null) {
-      window.clearInterval(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
-    }
-  }, []);
-
-  const resetWaveform = useCallback(() => {
-    stopWaveformLoop();
-    setWaveformData(Array.from({ length: 32 }, () => 0.08));
-  }, [stopWaveformLoop]);
-
-  const startWaveformLoop = useCallback(() => {
+  // Fill `out` with bar levels (0..1) for the visualizer. Called from the
+  // visualizer's own animation loop so level changes never re-render React.
+  const frequencyBufferRef = useRef<Uint8Array | null>(null);
+  const readLevels = useCallback((out: number[]) => {
+    const bars = out.length;
     const analyser = analyserRef.current;
-    if (!analyser) {
-      // No live analyser (touch devices): animate the bars from the
-      // track's stored waveform peaks around the playhead instead.
-      stopWaveformLoop();
-      const bars = 32;
-      fallbackTimerRef.current = window.setInterval(() => {
-        const audio = audioRef.current;
-        const peaksData = peaksRef.current;
-        if (!audio || !peaksData || peaksData.length === 0) return;
-        const progress =
-          Number.isFinite(audio.duration) && audio.duration > 0
-            ? audio.currentTime / audio.duration
-            : 0;
-        const center = Math.floor(progress * peaksData.length);
-        const wobble = 0.85 + 0.15 * Math.sin(Date.now() / 280);
-        const nextBars = Array.from({ length: bars }, (_, index) => {
-          const peak =
-            peaksData[
-              Math.min(peaksData.length - 1, Math.max(0, center - 8 + index))
-            ] ?? 0.08;
-          return Math.max(0.08, Math.min(1, peak * wobble));
-        });
-        setWaveformData(nextBars);
-      }, 240);
-      return;
-    }
-
-    const buffer = new Uint8Array(analyser.frequencyBinCount);
-    const bars = 32;
-
-    const tick = () => {
+    if (analyser) {
+      let buffer = frequencyBufferRef.current;
+      if (!buffer || buffer.length !== analyser.frequencyBinCount) {
+        buffer = new Uint8Array(analyser.frequencyBinCount);
+        frequencyBufferRef.current = buffer;
+      }
       analyser.getByteFrequencyData(buffer);
-      const nextBars = Array.from({ length: bars }, (_, index) => {
+      for (let index = 0; index < bars; index += 1) {
         const start = Math.floor((index * buffer.length) / bars);
         const end = Math.floor(((index + 1) * buffer.length) / bars);
         let total = 0;
-        let count = 0;
+        for (let cursor = start; cursor < end; cursor += 1) total += buffer[cursor];
+        const count = end - start;
+        out[index] = Math.max(0.08, count > 0 ? total / count / 255 : 0);
+      }
+      return;
+    }
 
-        for (let cursor = start; cursor < end; cursor += 1) {
-          total += buffer[cursor];
-          count += 1;
-        }
-
-        const magnitude = count > 0 ? total / count / 255 : 0;
-        return Math.max(0.08, magnitude);
-      });
-
-      setWaveformData(nextBars);
-      animationFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    stopWaveformLoop();
-    tick();
-  }, [stopWaveformLoop]);
+    // No live analyser (touch devices): animate the bars from the track's
+    // stored waveform peaks around the playhead instead.
+    const audio = audioRef.current;
+    const peaksData = peaksRef.current;
+    if (!audio || !peaksData || peaksData.length === 0) {
+      out.fill(0.08);
+      return;
+    }
+    const progress =
+      Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.currentTime / audio.duration
+        : 0;
+    const center = Math.floor(progress * peaksData.length);
+    const wobble = 0.85 + 0.15 * Math.sin(Date.now() / 280);
+    for (let index = 0; index < bars; index += 1) {
+      const peak =
+        peaksData[Math.min(peaksData.length - 1, Math.max(0, center - 8 + index))] ?? 0.08;
+      out[index] = Math.max(0.08, Math.min(1, peak * wobble));
+    }
+  }, []);
 
   const ensureAudioGraph = useCallback(async () => {
     const audio = audioRef.current;
@@ -167,18 +136,11 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     };
 
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handlePlay = () => {
-      setIsPlaying(true);
-      startWaveformLoop();
-    };
-    const handlePause = () => {
-      setIsPlaying(false);
-      stopWaveformLoop();
-    };
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(Number.isFinite(audio.duration) ? audio.duration : audio.currentTime);
-      resetWaveform();
       desiredPlayingRef.current = true;
       onEndedRef.current?.();
     };
@@ -191,7 +153,6 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     audio.addEventListener('ended', handleEnded);
 
     return () => {
-      stopWaveformLoop();
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
@@ -209,7 +170,7 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
       audioContextRef.current = null;
       audioRef.current = null;
     };
-  }, [resetWaveform, startWaveformLoop, stopWaveformLoop]);
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -235,7 +196,6 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
       setIsPlaying(false);
       setDuration(0);
       setCurrentTime(0);
-      resetWaveform();
       return;
     }
 
@@ -251,7 +211,6 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     audio.load();
     setDuration(0);
     setCurrentTime(0);
-    resetWaveform();
 
     if (shouldResumePlayback) {
       ensureAudioGraph()?.then(() => audio.play()).catch((error) => {
@@ -260,7 +219,7 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
         setIsPlaying(false);
       });
     }
-  }, [ensureAudioGraph, resetWaveform, src]);
+  }, [ensureAudioGraph, src]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -323,6 +282,6 @@ export const useAudio = (src: string, onEnded?: () => void, shouldLoop = false, 
     seek,
     volume,
     changeVolume,
-    waveformData
+    readLevels,
   };
 };

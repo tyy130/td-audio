@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Track, RepeatMode } from "../types";
 import {
   Play,
@@ -13,12 +13,13 @@ import {
   Repeat1,
   Share2,
 } from "lucide-react";
-import Visualizer from "./Visualizer";
-import { useAudio } from "../hooks/useAudio";
 import { clsx } from "clsx";
+import Visualizer from "./Visualizer";
+import Catalog from "./Catalog";
+import { useAudio } from "../hooks/useAudio";
 import { DEFAULT_COVER } from "../constants";
 import { recordPlayback, sendVibe, TrackMetrics } from "../services/storage";
-import { groupByAlbum } from "../services/albums";
+import { focusRing, formatTime, onCoverError, pad } from "./ui";
 
 interface PlayerProps {
   currentTrack: Track | null;
@@ -38,49 +39,30 @@ interface PlayerProps {
   onTrackMetrics: (id: string, metrics: TrackMetrics) => void;
 }
 
-const formatTime = (time: number) => {
-  if (isNaN(time) || !isFinite(time)) return "0:00";
-  const min = Math.floor(time / 60);
-  const sec = Math.floor(time % 60);
-  return `${min}:${sec < 10 ? "0" + sec : sec}`;
+const SHARE_URL = "https://listen.slughouse.com";
+const SEEK_STEP = 5;
+
+const repeatLabel: Record<RepeatMode, string> = {
+  off: "Repeat off",
+  all: "Repeat all",
+  one: "Repeat current track",
 };
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
-type GroupBy = "album" | "artist" | "genre";
-
-interface TrackGroup {
-  label: string;
-  sublabel?: string;
-  list: Track[];
-}
-
-const groupTracks = (tracks: Track[], groupBy: GroupBy): TrackGroup[] => {
-  if (groupBy === "album") {
-    // Album view is featured-first (newest album leads), not alphabetical.
-    return groupByAlbum(tracks).map((group) => ({
-      label: group.label,
-      sublabel: group.album ? group.artist : undefined,
-      list: group.tracks,
-    }));
+/** Elements that already use the key themselves. */
+const ownsKey = (target: EventTarget | null, key: string) => {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") {
+    // Range sliders handle arrows natively; text fields handle everything.
+    return (el as HTMLInputElement).type !== "range" || key.startsWith("arrow");
   }
-  const groups = new Map<string, Track[]>();
-  for (const track of tracks) {
-    const label =
-      (groupBy === "genre"
-        ? track.genre?.trim()
-        : track.artist?.trim()) || "Uncategorized";
-    const list = groups.get(label) ?? [];
-    list.push(track);
-    groups.set(label, list);
-  }
-  return [...groups.entries()]
-    .map(([label, list]) => ({ label, list }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  // Buttons and links activate on Space/Enter.
+  if (tag === "BUTTON" || tag === "A") return key === " " || key === "enter";
+  return false;
 };
-
-const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acid focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0b]";
 
 const Player: React.FC<PlayerProps> = ({
   currentTrack,
@@ -108,7 +90,7 @@ const Player: React.FC<PlayerProps> = ({
     currentTime,
     seek,
     changeVolume,
-    waveformData,
+    readLevels,
   } = useAudio(
     currentTrack?.src || "",
     onAutoAdvance,
@@ -119,10 +101,14 @@ const Player: React.FC<PlayerProps> = ({
   const [toast, setToast] = useState<string | null>(null);
   const [resonance, setResonance] = useState(3);
   const [isSubmittingVibe, setIsSubmittingVibe] = useState(false);
-  const [playRecordedFor, setPlayRecordedFor] = useState<string | null>(null);
+  // Which track's play has been counted. A ref, set before the request goes
+  // out, so a re-render mid-request can't count the same play twice.
+  const recordedForRef = useRef<string | null>(null);
+  const [nowPlayingVisible, setNowPlayingVisible] = useState(true);
   const queuedTrackToPlayRef = useRef<string | null>(null);
-  const [groupBy, setGroupBy] = useState<GroupBy>("album");
-  const grouped = useMemo(() => groupTracks(tracks, groupBy), [tracks, groupBy]);
+  const lastVolumeRef = useRef(volume > 0 ? volume : 1);
+  const mainRef = useRef<HTMLElement>(null);
+  const nowPlayingRef = useRef<HTMLElement>(null);
 
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.id === currentTrack.id)
@@ -173,28 +159,79 @@ const Player: React.FC<PlayerProps> = ({
     }
   }, [duration, currentTime]);
 
-  const handleVolumeChange = (value: number) => {
-    changeVolume(value);
-    onVolumeChange(value);
-  };
+  // On phones the now-playing block scrolls away; show a mini "now playing"
+  // strip in the transport bar once it does.
+  useEffect(() => {
+    const target = nowPlayingRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setNowPlayingVisible(entry.isIntersecting),
+      { root: mainRef.current, threshold: 0.15 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
 
-  const handlePrevClick = () => {
+  const handleVolumeChange = useCallback(
+    (value: number) => {
+      if (value > 0) lastVolumeRef.current = value;
+      changeVolume(value);
+      onVolumeChange(value);
+    },
+    [changeVolume, onVolumeChange],
+  );
+
+  const toggleMute = useCallback(() => {
+    handleVolumeChange(volume === 0 ? lastVolumeRef.current : 0);
+  }, [handleVolumeChange, volume]);
+
+  const handlePrevClick = useCallback(() => {
     if (currentTime > 3) {
       seek(0);
     } else {
       onPrev();
     }
-  };
+  }, [currentTime, seek, onPrev]);
 
-  const handleSelectTrack = (track: Track) => {
-    if (currentTrack?.id === track.id) {
-      play();
-      return;
-    }
+  const handleSelectTrack = useCallback(
+    (track: Track) => {
+      if (currentTrack?.id === track.id) {
+        togglePlay();
+        return;
+      }
+      queuedTrackToPlayRef.current = track.id;
+      onSelect(track);
+    },
+    [currentTrack?.id, togglePlay, onSelect],
+  );
 
-    queuedTrackToPlayRef.current = track.id;
-    onSelect(track);
-  };
+  // Keyboard: Space/K play-pause, ←/→ seek, Shift+←/→ prev/next, M mute.
+  // Read live values through a ref so the listener is attached once.
+  const keyStateRef = useRef({ togglePlay, onNext, handlePrevClick, seek, duration, currentTime, toggleMute });
+  keyStateRef.current = { togglePlay, onNext, handlePrevClick, seek, duration, currentTime, toggleMute };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (e.metaKey || e.ctrlKey || e.altKey || ownsKey(e.target, key)) return;
+      const k = keyStateRef.current;
+      if (key === " " || key === "k") {
+        e.preventDefault();
+        k.togglePlay();
+      } else if (key === "arrowright") {
+        e.preventDefault();
+        if (e.shiftKey) k.onNext();
+        else k.seek(Math.min(k.duration || 0, k.currentTime + SEEK_STEP));
+      } else if (key === "arrowleft") {
+        e.preventDefault();
+        if (e.shiftKey) k.handlePrevClick();
+        else k.seek(Math.max(0, k.currentTime - SEEK_STEP));
+      } else if (key === "m") {
+        k.toggleMute();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -206,34 +243,15 @@ const Player: React.FC<PlayerProps> = ({
     if (!currentTrack || queuedTrackToPlayRef.current !== currentTrack.id) {
       return;
     }
-
     queuedTrackToPlayRef.current = null;
     play();
-  }, [currentTrack?.id, play, currentTrack]);
-
-  const shareUrl =
-    typeof window !== "undefined" &&
-    window.location.origin.includes("localhost")
-      ? window.location.origin
-      : "https://listen.slughouse.com";
+  }, [currentTrack, play]);
 
   const copyLink = async () => {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = shareUrl;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
-      }
+      await navigator.clipboard.writeText(SHARE_URL);
       setToast("Invite link copied");
-    } catch (err) {
+    } catch {
       setToast("Unable to copy link");
     }
   };
@@ -244,15 +262,15 @@ const Player: React.FC<PlayerProps> = ({
         ? `${currentTrack.title} · ${currentTrack.artist}`
         : "Slughouse Records",
       text: "You're on the list. This Slughouse drop is private.",
-      url: shareUrl,
+      url: SHARE_URL,
     };
     if (navigator.share) {
       try {
         await navigator.share(data);
-        setToast("Invite sent");
         return;
       } catch (err) {
-        // fall through to clipboard copy
+        // User closed the share sheet: nothing to do.
+        if ((err as DOMException)?.name === "AbortError") return;
       }
     }
     await copyLink();
@@ -269,23 +287,23 @@ const Player: React.FC<PlayerProps> = ({
         ),
       ),
     );
-    setPlayRecordedFor(null);
   }, [currentTrack?.id, currentTrack?.vibeAverage]);
 
+  const currentTrackId = currentTrack?.id;
   useEffect(() => {
-    const capturePlay = async () => {
-      if (!currentTrack || !isPlaying || playRecordedFor === currentTrack.id)
-        return;
-      try {
-        const metrics = await recordPlayback(currentTrack.id);
-        onTrackMetrics(currentTrack.id, metrics);
-        setPlayRecordedFor(currentTrack.id);
-      } catch (err) {
+    if (!currentTrackId || !isPlaying) return;
+    if (recordedForRef.current === currentTrackId) return;
+    recordedForRef.current = currentTrackId;
+    recordPlayback(currentTrackId)
+      .then((metrics) => onTrackMetrics(currentTrackId, metrics))
+      .catch((err) => {
         console.error("Failed to record play", err);
-      }
-    };
-    capturePlay();
-  }, [currentTrack, isPlaying, onTrackMetrics, playRecordedFor]);
+        // Let the next play attempt count it instead.
+        if (recordedForRef.current === currentTrackId) {
+          recordedForRef.current = null;
+        }
+      });
+  }, [currentTrackId, isPlaying, onTrackMetrics]);
 
   const submitVibe = async (value: number) => {
     if (!currentTrack) return;
@@ -294,73 +312,85 @@ const Player: React.FC<PlayerProps> = ({
       const metrics = await sendVibe(currentTrack.id, value);
       onTrackMetrics(currentTrack.id, metrics);
       setResonance(value);
-      setToast("Resonance saved");
+      setToast("Rating saved");
     } catch (err) {
       console.error("Failed to submit resonance", err);
-      setToast("Unable to send vibe right now");
+      setToast("Couldn't save rating, try again");
     } finally {
       setIsSubmittingVibe(false);
     }
   };
 
+  const progress = duration > 0 ? currentTime / duration : 0;
+  const progressPct = Math.min(100, progress * 100);
+  const iconButton = clsx(
+    "flex h-10 w-10 items-center justify-center transition-colors",
+    focusRing,
+  );
+
   return (
-    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#0c0c0b] text-ink">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-surface text-ink">
       {/* Header */}
-      <header className="flex items-stretch justify-between border-b border-line">
-        <div className="flex flex-col gap-0.5 px-4 py-3 md:px-6">
-          <span className="font-mono text-[0.6rem] uppercase tracking-[0.4em] text-dim">
+      <header className="flex shrink-0 items-stretch justify-between border-b border-line pt-[env(safe-area-inset-top)]">
+        <div className="flex min-w-0 flex-col gap-0.5 px-4 py-2.5 md:px-6 md:py-3">
+          <span className="truncate font-mono text-[0.65rem] uppercase tracking-[0.35em] text-dim">
             Listening Room — Private
           </span>
-          <span className="font-display text-lg uppercase leading-none tracking-tight md:text-xl">
+          <span className="truncate font-display text-base uppercase leading-none tracking-tight sm:text-lg md:text-xl">
             Slughouse Records
           </span>
         </div>
         <div className="flex items-stretch">
-          <span className="hidden items-center border-l border-line px-5 font-mono text-[0.6rem] uppercase tracking-[0.3em] text-dim md:flex">
-            <span className="mr-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-acid" />
+          <span className="hidden items-center border-l border-line px-5 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim lg:flex">
+            <span className="mr-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-acid motion-reduce:animate-none" />
             Friends &amp; Family Proof
           </span>
           <button
+            type="button"
             onClick={onAdminOpen}
             className={clsx(
-              "flex items-center gap-2 border-l border-line px-4 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:bg-panel hover:text-ink md:px-6",
+              "flex items-center gap-2 border-l border-line px-4 font-mono text-[0.7rem] uppercase tracking-[0.25em] text-dim transition-colors hover:bg-panel hover:text-ink md:px-6",
               focusRing,
             )}
-            title="Manage Library"
-            aria-label="Open admin panel to manage library"
+            title="Manage library"
+            aria-label="Open the vault to manage the library"
           >
-            <Settings size={14} />
+            <Settings size={16} />
             <span className="hidden sm:inline">Vault</span>
           </button>
         </div>
       </header>
 
-      {/* Main */}
-      <main className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-rows-1 lg:overflow-hidden lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_460px]">
+      {/* Main: one scrolling column on phones, two panes from tablet up */}
+      <main
+        ref={mainRef}
+        className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-1 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_460px]"
+      >
         {/* Now Playing */}
-        <section className="relative flex flex-col justify-center px-4 py-10 md:px-10 lg:overflow-y-auto lg:py-6">
+        <section
+          ref={nowPlayingRef}
+          aria-label="Now playing"
+          className="relative flex flex-col px-4 py-6 sm:py-10 md:overflow-y-auto md:px-8 md:py-6 lg:px-10 [@media(max-height:500px)]:py-4"
+        >
           {isLibraryLoading ? (
             <div
-              className="mx-auto w-full max-w-md animate-pulse lg:max-w-lg"
+              className="m-auto w-full max-w-md animate-pulse lg:max-w-lg"
               aria-busy="true"
               aria-label="Loading library"
             >
-              <div className="mx-auto aspect-square w-56 border border-line bg-panel sm:w-64 lg:w-72" />
-              <div className="mt-8 space-y-3">
-                <div className="h-9 w-3/4 bg-panel" />
+              <div className="mx-auto aspect-square w-44 border border-line bg-panel sm:w-60 md:w-[min(15rem,30vh)] lg:w-[min(18rem,28vh)]" />
+              <div className="mt-6 space-y-3">
+                <div className="h-8 w-3/4 bg-panel" />
                 <div className="h-4 w-1/3 bg-panel" />
               </div>
-              <div className="mt-8 h-14 bg-panel" />
-              <p className="mt-6 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
-                Loading vault…
-              </p>
+              <div className="mt-6 h-10 bg-panel sm:h-14" />
             </div>
           ) : currentTrack ? (
             <div
               key={currentTrack.id}
-              className="mx-auto w-full max-w-md animate-fade-up lg:max-w-lg"
+              className="m-auto w-full max-w-md animate-fade-up motion-reduce:animate-none lg:max-w-lg"
             >
-              <div className="relative mx-auto aspect-square w-60 border border-line bg-panel p-4 sm:w-72 lg:w-80">
+              <div className="relative mx-auto aspect-square w-44 border border-line bg-panel p-3 sm:w-60 sm:p-4 md:w-[min(15rem,30vh)] lg:w-[min(18rem,28vh)] xl:w-[min(20rem,30vh)] [@media(max-height:500px)]:w-32">
                 {/* Vinyl record */}
                 <div
                   className="relative h-full w-full animate-[spin_4s_linear_infinite] motion-reduce:animate-none"
@@ -371,14 +401,11 @@ const Player: React.FC<PlayerProps> = ({
                   <div className="absolute inset-0 overflow-hidden rounded-full border border-line shadow-[0_0_40px_rgba(0,0,0,0.6)]">
                     <img
                       src={currentTrack.coverArt || DEFAULT_COVER}
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null;
-                        target.src = DEFAULT_COVER;
-                      }}
+                      onError={onCoverError}
                       alt={`Cover art for ${currentTrack.title}`}
+                      decoding="async"
                       className={clsx(
-                        "h-full w-full object-cover transition-all duration-700",
+                        "h-full w-full object-cover transition-[filter] duration-700",
                         isPlaying ? "grayscale-0" : "grayscale",
                       )}
                     />
@@ -403,84 +430,92 @@ const Player: React.FC<PlayerProps> = ({
                       SHR
                     </span>
                     <span
-                      className="h-[14%] w-[14%] rounded-full bg-[#0c0c0b]"
+                      className="h-[14%] w-[14%] rounded-full bg-surface"
                       aria-hidden="true"
                     />
                   </div>
                 </div>
-                <span className="absolute -top-px -right-px bg-acid px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.2em] text-black">
+                <span className="absolute -right-px -top-px bg-acid px-2 py-1 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-black">
                   SHR—{pad(currentIndex + 1)}
                 </span>
               </div>
 
-              <div className="mt-8">
-                <h1 className="font-display text-[clamp(1.8rem,4.5vw,3rem)] uppercase leading-[0.95] tracking-tight">
+              <div className="mt-6 text-center sm:mt-8 sm:text-left md:mt-5 lg:mt-6">
+                <h1 className="break-words font-display text-[clamp(1.6rem,6vw,3rem)] uppercase leading-[0.95] tracking-tight md:text-[clamp(1.6rem,3.5vw,3rem)]">
                   {currentTrack.title}
                 </h1>
                 <p className="mt-2 font-mono text-xs uppercase tracking-[0.3em] text-dim">
                   {currentTrack.artist}
+                  {currentTrack.album ? (
+                    <span className="text-dim/70"> · {currentTrack.album}</span>
+                  ) : null}
                 </p>
               </div>
 
-              <div className="mt-8">
+              <div className="mt-6 sm:mt-8 md:mt-5 lg:mt-6">
                 <Visualizer
                   isPlaying={isPlaying}
-                  waveformData={waveformData}
-                  progress={duration > 0 ? currentTime / duration : 0}
+                  progress={progress}
+                  readLevels={readLevels}
                 />
               </div>
 
-              <div className="mt-8 grid grid-cols-2 gap-px border border-line bg-line">
-                <div className="bg-[#0c0c0b] p-4">
-                  <div className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-dim">
-                    Plays
+              {/* Stats + rating */}
+              <div className="mt-6 border border-line sm:mt-8 md:mt-5 lg:mt-6">
+                <div className="grid grid-cols-2 gap-px bg-line">
+                  <div className="bg-surface px-4 py-3">
+                    <div className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
+                      Plays
+                    </div>
+                    <div className="mt-1 font-display text-xl sm:text-2xl">
+                      {currentTrack.playCount ?? 0}
+                    </div>
                   </div>
-                  <div className="mt-1 font-display text-2xl">
-                    {currentTrack.playCount ?? 0}
+                  <div className="bg-surface px-4 py-3">
+                    <div className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
+                      Resonance
+                    </div>
+                    <div className="mt-1 font-display text-xl text-acid sm:text-2xl">
+                      {(currentTrack.vibeAverage ?? 0).toFixed(1)}
+                      <span className="ml-1 font-mono text-xs text-dim">
+                        / 5
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="bg-[#0c0c0b] p-4">
-                  <div className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-dim">
-                    Resonance
-                  </div>
-                  <div className="mt-1 font-display text-2xl text-acid">
-                    {(currentTrack.vibeAverage ?? 0).toFixed(1)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3">
                 <div
-                  className="flex gap-px border border-line bg-line"
-                  role="group"
-                  aria-label="Rate resonance"
+                  className="flex gap-px border-t border-line bg-line"
+                  role="radiogroup"
+                  aria-label="Rate this track from 1 to 5"
                 >
                   {[1, 2, 3, 4, 5].map((level) => (
                     <button
                       key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={resonance === level}
                       onClick={() => submitVibe(level)}
                       disabled={isSubmittingVibe}
                       className={clsx(
-                        "flex-1 py-3 font-mono text-xs transition-colors disabled:opacity-50",
+                        "min-h-[44px] flex-1 font-mono text-xs transition-colors disabled:opacity-50",
                         focusRing,
                         resonance >= level
                           ? "bg-acid text-black"
-                          : "bg-[#0c0c0b] text-dim hover:text-ink",
+                          : "bg-surface text-dim hover:text-ink",
                       )}
-                      aria-label={`Set resonance to ${level} out of 5`}
-                      aria-pressed={resonance === level}
+                      aria-label={`${level} out of 5`}
                     >
                       {pad(level)}
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim">
-                  Tap to rate this track
-                </p>
               </div>
+              <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim sm:text-left">
+                Tap a number to rate this track
+              </p>
             </div>
           ) : (
-            <div className="mx-auto max-w-sm text-center">
+            <div className="m-auto max-w-sm text-center">
               <p className="font-display text-xl uppercase">
                 The vault is silent.
               </p>
@@ -488,6 +523,7 @@ const Player: React.FC<PlayerProps> = ({
                 Load a private mix for the inner circle.
               </p>
               <button
+                type="button"
                 onClick={onAdminOpen}
                 className={clsx(
                   "mt-6 border border-ink px-6 py-3 font-mono text-xs uppercase tracking-[0.2em] transition-colors hover:bg-ink hover:text-black",
@@ -500,290 +536,189 @@ const Player: React.FC<PlayerProps> = ({
           )}
         </section>
 
-        {/* Catalog */}
-        <aside className="flex min-h-0 flex-col border-t border-line lg:border-t-0 lg:border-l">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3 md:px-5">
-            <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
-              Catalog
-            </h3>
-            <span className="font-mono text-[0.65rem] uppercase tracking-[0.3em] text-dim">
-              {isLibraryLoading
-                ? "—"
-                : `${tracks.length} ${tracks.length === 1 ? "Track" : "Tracks"}`}
-            </span>
-          </div>
-          <div className="flex items-center gap-1 border-b border-line px-4 py-2 md:px-5">
-            <span className="mr-auto font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim/50">
-              Group by
-            </span>
-            {(["album", "artist", "genre"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setGroupBy(mode)}
-                aria-pressed={groupBy === mode}
-                className={clsx(
-                  "px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.2em] transition-colors",
-                  focusRing,
-                  groupBy === mode
-                    ? "bg-acid text-black"
-                    : "text-dim hover:text-ink",
-                )}
-              >
-                {mode === "album"
-                  ? "Album"
-                  : mode === "artist"
-                    ? "Artist"
-                    : "Genre"}
-              </button>
-            ))}
-          </div>
-          <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto">
-            {isLibraryLoading
-              ? Array.from({ length: 8 }).map((_, idx) => (
-                  <div
-                    key={`loading-${idx}`}
-                    className="flex items-center gap-3 border-b border-line px-4 py-3 md:px-5 animate-pulse"
-                  >
-                    <span className="w-6 font-mono text-[0.65rem] text-dim/50">
-                      {pad(idx + 1)}
-                    </span>
-                    <div className="h-9 w-9 bg-panel" />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="h-3.5 w-2/3 bg-panel" />
-                      <div className="h-2.5 w-1/3 bg-panel" />
-                    </div>
-                  </div>
-                ))
-              : grouped.map((group) => (
-                  <div key={group.label}>
-                    <div className="sticky top-0 z-10 flex items-baseline justify-between gap-2 border-b border-line bg-[#0c0c0b] px-4 py-2 md:px-5">
-                      <span className="truncate font-mono text-[0.65rem] uppercase tracking-[0.25em] text-acid/90">
-                        {group.label}
-                        {group.sublabel ? (
-                          <span className="text-dim/70">
-                            {" "}
-                            · {group.sublabel}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="shrink-0 font-mono text-[0.6rem] text-dim/60">
-                        {group.list.length}
-                      </span>
-                    </div>
-                    {group.list.map((t, idx) => {
-                      const isCurrent = currentTrack?.id === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => handleSelectTrack(t)}
-                          className={clsx(
-                            "group flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors md:px-5",
-                            focusRing,
-                            isCurrent ? "bg-panel" : "hover:bg-panel/60",
-                          )}
-                          aria-current={isCurrent ? "true" : undefined}
-                        >
-                          <span
-                            className={clsx(
-                              "w-6 shrink-0 font-mono text-[0.65rem]",
-                              isCurrent ? "text-acid" : "text-dim",
-                            )}
-                          >
-                            {isCurrent && isPlaying ? (
-                              <span
-                                className="flex h-3 items-end gap-[2px]"
-                                aria-label="Now playing"
-                              >
-                                {[0, 1, 2].map((i) => (
-                                  <span
-                                    key={i}
-                                    className="w-[3px] animate-music-bar bg-acid"
-                                    style={{ animationDelay: `-${i * 0.2}s` }}
-                                  />
-                                ))}
-                              </span>
-                            ) : (
-                              pad(idx + 1)
-                            )}
-                          </span>
-                          <img
-                            src={t.coverArt || DEFAULT_COVER}
-                            alt=""
-                            className="h-9 w-9 shrink-0 border border-line object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = DEFAULT_COVER;
-                            }}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span
-                              className={clsx(
-                                "block truncate text-sm font-medium",
-                                isCurrent
-                                  ? "text-ink"
-                                  : "text-dim group-hover:text-ink",
-                              )}
-                            >
-                              {t.title}
-                            </span>
-                            <span className="block truncate font-mono text-[0.65rem] uppercase tracking-[0.15em] text-dim/70">
-                              {t.artist}
-                              {t.genre ? ` · ${t.genre}` : ""}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-right font-mono text-[0.65rem] text-dim/70">
-                            {t.duration ? formatTime(t.duration) : "—"}
-                            <span className="mt-0.5 block">
-                              {t.playCount ?? 0} plays
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-            {!isLibraryLoading && tracks.length === 0 && (
-              <p
-                className="p-5 font-mono text-xs uppercase tracking-[0.2em] text-dim"
-                role="status"
-              >
-                Nothing in the catalog yet
-              </p>
-            )}
-          </div>
-        </aside>
+        <Catalog
+          tracks={tracks}
+          currentTrackId={currentTrack?.id ?? null}
+          isPlaying={isPlaying}
+          isLoading={isLibraryLoading}
+          onSelect={handleSelectTrack}
+        />
+
+        {/* Site links live at the end of the scroll on phones */}
+        <nav
+          aria-label="Slughouse links"
+          className="flex justify-center gap-6 border-t border-line px-4 py-4 md:hidden"
+        >
+          <a
+            href="https://slughouse.com/merch"
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono text-[0.7rem] uppercase tracking-[0.25em] text-dim hover:text-acid"
+          >
+            Merch ↗
+          </a>
+          <a
+            href="https://slughouse.com"
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono text-[0.7rem] uppercase tracking-[0.25em] text-dim hover:text-acid"
+          >
+            slughouse.com ↗
+          </a>
+        </nav>
       </main>
 
       {/* Transport */}
-      <footer className="z-20 border-t border-line bg-[#0c0c0b] pb-[env(safe-area-inset-bottom)]">
+      <footer className="z-20 shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
+        {/* Mini now-playing, phones only, once the big one scrolls away */}
+        {currentTrack && !nowPlayingVisible && (
+          <button
+            type="button"
+            onClick={() =>
+              mainRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+            }
+            className={clsx(
+              "flex w-full items-center gap-3 border-b border-line px-4 py-2 text-left md:hidden",
+              focusRing,
+            )}
+            aria-label={`Now playing: ${currentTrack.title} by ${currentTrack.artist}. Show player.`}
+          >
+            <img
+              src={currentTrack.coverArt || DEFAULT_COVER}
+              onError={onCoverError}
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 border border-line object-cover"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {currentTrack.title}
+              </span>
+              <span className="block truncate font-mono text-[0.65rem] uppercase tracking-[0.15em] text-dim">
+                {currentTrack.artist}
+              </span>
+            </span>
+          </button>
+        )}
+
         {/* Seek */}
-        <div className="flex items-center gap-3 border-b border-line px-4 py-3 md:px-6">
-          <span className="w-10 font-mono text-[0.65rem] text-dim">
+        <div className="flex items-center gap-3 px-4 pt-3 md:px-6">
+          <span className="w-10 font-mono text-[0.7rem] tabular-nums text-dim">
             {formatTime(currentTime)}
           </span>
           <input
             type="range"
             min={0}
             max={duration || 0.1}
-            value={currentTime}
+            step="any"
+            value={Math.min(currentTime, duration || 0.1)}
             onChange={(e) => seek(Number(e.target.value))}
-            className="h-3 flex-1"
+            className="h-6 min-w-0 flex-1"
             style={{
-              ["--range-bg" as string]: `linear-gradient(to right, #c3f53c ${
-                (currentTime / (duration || 1)) * 100
-              }%, #2a2a28 ${(currentTime / (duration || 1)) * 100}%)`,
+              ["--range-bg" as string]: `linear-gradient(to right, #c3f53c ${progressPct}%, #2a2a28 ${progressPct}%)`,
             }}
-            aria-label="Seek position"
+            aria-label="Seek"
+            aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+            disabled={!currentTrack}
           />
-          <span className="w-10 text-right font-mono text-[0.65rem] text-dim">
+          <span className="w-10 text-right font-mono text-[0.7rem] tabular-nums text-dim">
             {formatTime(duration)}
           </span>
         </div>
 
         {/* Controls */}
-        <div className="flex items-center justify-between px-4 py-3 md:px-6">
-          <div className="flex items-center gap-1 md:gap-2">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center px-2 pb-2 pt-1 sm:px-4 md:px-6">
+          <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={onShuffleToggle}
               className={clsx(
-                "p-2.5 transition-colors",
-                focusRing,
+                iconButton,
                 isShuffle ? "text-acid" : "text-dim hover:text-ink",
               )}
               aria-pressed={isShuffle}
-              aria-label={
-                isShuffle ? "Disable shuffle mode" : "Enable shuffle mode"
-              }
-              title={isShuffle ? "Shuffle enabled" : "Enable shuffle"}
+              aria-label="Shuffle"
+              title={isShuffle ? "Shuffle on" : "Shuffle off"}
             >
-              <Shuffle size={16} />
+              <Shuffle size={18} />
             </button>
             <button
+              type="button"
               onClick={onRepeatToggle}
               className={clsx(
-                "p-2.5 transition-colors",
-                focusRing,
+                iconButton,
                 repeatMode !== "off" ? "text-acid" : "text-dim hover:text-ink",
               )}
-              aria-pressed={repeatMode !== "off"}
-              aria-label={
-                repeatMode === "off"
-                  ? "Enable repeat"
-                  : repeatMode === "all"
-                    ? "Repeat all tracks"
-                    : "Repeat current track"
-              }
-              title={
-                repeatMode === "off"
-                  ? "Enable repeat"
-                  : repeatMode === "all"
-                    ? "Repeat all"
-                    : "Repeat current track"
-              }
+              aria-label={`${repeatLabel[repeatMode]}. Change repeat mode`}
+              title={repeatLabel[repeatMode]}
             >
               {repeatMode === "one" ? (
-                <Repeat1 size={16} />
+                <Repeat1 size={18} />
               ) : (
-                <Repeat size={16} />
+                <Repeat size={18} />
               )}
             </button>
           </div>
 
-          <div className="flex items-center gap-4 md:gap-6">
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
             <button
+              type="button"
               onClick={handlePrevClick}
-              className={clsx(
-                "p-2 text-dim transition-colors hover:text-ink",
-                focusRing,
-              )}
+              className={clsx(iconButton, "h-11 w-11 text-dim hover:text-ink")}
               aria-label="Previous track"
+              title="Previous (Shift + ←)"
             >
-              <SkipBack size={20} />
+              <SkipBack size={22} />
             </button>
             <button
+              type="button"
               onClick={togglePlay}
+              disabled={!currentTrack}
               className={clsx(
-                "flex h-12 w-12 items-center justify-center bg-acid text-black transition-transform hover:scale-105 md:h-14 md:w-14",
+                "flex h-14 w-14 items-center justify-center bg-acid text-black transition-transform hover:scale-105 active:scale-95 disabled:opacity-40",
                 focusRing,
               )}
               aria-label={isPlaying ? "Pause" : "Play"}
+              title={isPlaying ? "Pause (Space)" : "Play (Space)"}
             >
               {isPlaying ? (
-                <Pause size={22} fill="currentColor" />
+                <Pause size={24} fill="currentColor" />
               ) : (
-                <Play size={22} fill="currentColor" className="ml-0.5" />
+                <Play size={24} fill="currentColor" className="ml-0.5" />
               )}
             </button>
             <button
+              type="button"
               onClick={onNext}
-              className={clsx(
-                "p-2 text-dim transition-colors hover:text-ink",
-                focusRing,
-              )}
+              className={clsx(iconButton, "h-11 w-11 text-dim hover:text-ink")}
               aria-label="Next track"
+              title="Next (Shift + →)"
             >
-              <SkipForward size={20} />
+              <SkipForward size={22} />
             </button>
           </div>
 
-          <div className="flex items-center gap-1 md:gap-3">
+          <div className="flex items-center justify-end gap-1 md:gap-2">
             <button
+              type="button"
               onClick={handleShare}
-              className={clsx(
-                "p-2.5 text-dim transition-colors hover:text-ink",
-                focusRing,
-              )}
+              className={clsx(iconButton, "text-dim hover:text-ink")}
               title="Share invite link"
               aria-label="Share invite link"
             >
-              <Share2 size={16} />
+              <Share2 size={18} />
             </button>
-            <div className="hidden items-center gap-2 sm:flex">
+            {/* Phones use their hardware volume buttons */}
+            <div className="hidden items-center gap-1 sm:flex">
               <button
-                onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)}
-                className={clsx("p-1 text-dim hover:text-ink", focusRing)}
+                type="button"
+                onClick={toggleMute}
+                className={clsx(iconButton, "text-dim hover:text-ink")}
                 aria-label={volume === 0 ? "Unmute" : "Mute"}
+                title={volume === 0 ? "Unmute (M)" : "Mute (M)"}
               >
-                {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </button>
               <input
                 type="range"
@@ -792,11 +727,9 @@ const Player: React.FC<PlayerProps> = ({
                 step={0.01}
                 value={volume}
                 onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="h-3 w-20"
+                className="h-6 w-20 lg:w-24"
                 style={{
-                  ["--range-bg" as string]: `linear-gradient(to right, #e8e6e1 ${volume * 100}%, #2a2a28 ${
-                    volume * 100
-                  }%)`,
+                  ["--range-bg" as string]: `linear-gradient(to right, #e8e6e1 ${volume * 100}%, #2a2a28 ${volume * 100}%)`,
                 }}
                 aria-label="Volume"
               />
@@ -804,30 +737,13 @@ const Player: React.FC<PlayerProps> = ({
           </div>
         </div>
 
-        {/* Status strip */}
-        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 border-t border-line px-4 py-2">
-          <span
-            className={clsx(
-              "font-mono text-[0.6rem] uppercase tracking-[0.25em]",
-              isShuffle ? "text-acid" : "text-dim/70",
-            )}
-          >
-            Shuffle {isShuffle ? "On" : "Off"}
-          </span>
-          <span
-            className={clsx(
-              "font-mono text-[0.6rem] uppercase tracking-[0.25em]",
-              repeatMode !== "off" ? "text-acid" : "text-dim/70",
-            )}
-          >
-            Repeat{" "}
-            {repeatMode === "one" ? "1" : repeatMode === "off" ? "Off" : "All"}
-          </span>
+        {/* Links strip, tablet and up */}
+        <div className="hidden items-center justify-center gap-x-6 border-t border-line px-4 py-2 md:flex [@media(max-height:500px)]:!hidden">
           <a
             href="https://slughouse.com/merch"
             target="_blank"
             rel="noreferrer"
-            className="font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim/70 transition-colors hover:text-acid"
+            className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-acid"
           >
             Merch ↗
           </a>
@@ -835,21 +751,27 @@ const Player: React.FC<PlayerProps> = ({
             href="https://slughouse.com"
             target="_blank"
             rel="noreferrer"
-            className="font-mono text-[0.6rem] uppercase tracking-[0.25em] text-dim/70 transition-colors hover:text-acid"
+            className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim transition-colors hover:text-acid"
           >
             slughouse.com ↗
           </a>
+          <span className="hidden font-mono text-[0.65rem] uppercase tracking-[0.25em] text-dim/60 lg:inline">
+            Space play · ← → seek · Shift skip
+          </span>
         </div>
+      </footer>
 
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-0 bottom-40 z-50 flex justify-center px-4"
+      >
         {toast && (
-          <div
-            role="status"
-            className="absolute bottom-32 left-1/2 -translate-x-1/2 border border-acid bg-[#0c0c0b] px-4 py-2 font-mono text-xs uppercase tracking-[0.15em] text-acid"
-          >
+          <div className="border border-acid bg-surface px-4 py-2 font-mono text-xs uppercase tracking-[0.15em] text-acid">
             {toast}
           </div>
         )}
-      </footer>
+      </div>
     </div>
   );
 };
